@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pandas>=2.2.3,<3
+# NumPy 2.1+ and scikit-learn 1.6+ publish Windows wheels for Python 3.13.
+numpy>=2.1,<3
+scikit-learn>=1.6,<2
+imbalanced-learn==0.12.4
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-multipart==0.0.9
+joblib==1.4.2

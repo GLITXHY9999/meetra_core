@@ -1,0 +1,17 @@
+# Python virtual environments
+.venv/
+.venv_fresh/
+__pycache__/
+*.pyc
+
+# Massive datasets exceeding GitHub's 100MB limit (can be regenerated with generate_1m_dataset.py)
+enterprise_workforce_1m.csv
+
+# Pytest and Temporary storage
+.pytest_cache/
+storage/tmp/
+scratch/
+
+# Local configuration and logs
+*.log
+.env

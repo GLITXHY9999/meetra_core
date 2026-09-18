@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111f">
+  <title>Kaizen | Employee Retention Intelligence</title>
+  <style>
+    :root {
+      --ink:#edf4ff; --muted:#94a3b8; --dim:#64748b; --line:#223047;
+      --base:#07111f; --panel:#0d1a2d; --panel-2:#101f35; --blue:#60a5fa;
+      --cyan:#22d3ee; --green:#34d399; --amber:#fbbf24; --rose:#fb7185;
+      --violet:#a78bfa; --shadow:0 20px 45px rgba(0,0,0,.25);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--base); color:var(--ink); font:14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select { font:inherit; }
+    button { cursor:pointer; }
+    .app { min-height:100vh; display:grid; grid-template-columns:250px minmax(0,1fr); }
+    .sidebar { position:sticky; top:0; height:100vh; padding:22px 14px; display:flex; flex-direction:column; background:#091528; border-right:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:11px; padding:7px 10px 25px; border-bottom:1px solid var(--line); }
+    .brand-mark { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; color:#02121c; font-weight:900; background:linear-gradient(135deg, var(--cyan), var(--blue), var(--violet)); box-shadow:0 8px 25px rgba(34,211,238,.18); }
+    .brand h1 { margin:0; font-size:17px; letter-spacing:-.02em; }
+    .brand p { margin:0; color:var(--muted); font-size:11px; }
+    .eyebrow { color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .model-chip { margin:20px 7px; padding:11px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.025); }
+    .model-row { display:flex; justify-content:space-between; align-items:center; gap:7px; padding:5px 0; color:#dbeafe; font-size:12px; }
+    .dot { display:inline-block; width:7px; height:7px; margin-right:6px; border-radius:50%; background:var(--cyan); }
+    .dot.violet { background:var(--violet); }
+    .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:4px 8px; color:var(--muted); font-size:11px; }
+    .pill.live { border-color:rgba(52,211,153,.4); color:#86efac; background:rgba(16,185,129,.08); }
+    .nav { display:grid; gap:5px; }
+    .nav button { width:100%; display:flex; align-items:center; gap:10px; padding:10px 11px; border:0; border-radius:9px; color:var(--muted); text-align:left; background:transparent; }
+    .nav button:hover { color:var(--ink); background:rgba(96,165,250,.08); }
+    .nav button.active { color:#e0f2fe; background:linear-gradient(90deg, rgba(34,211,238,.16), rgba(96,165,250,.06)); box-shadow:inset 2px 0 var(--cyan); }
+    .nav-icon { display:grid; width:20px; place-items:center; color:var(--cyan); }
+    .sidebar-footer { margin-top:auto; padding:15px 9px 4px; border-top:1px solid var(--line); color:var(--dim); font-size:11px; }
+    .main { min-width:0; }
+    .topbar { min-height:75px; padding:17px 34px; display:flex; align-items:center; justify-content:space-between; gap:20px; border-bottom:1px solid var(--line); background:rgba(7,17,31,.86); }
+    .topbar h2 { margin:0; font-size:16px; letter-spacing:-.01em; }
+    .topbar p { margin:2px 0 0; color:var(--muted); font-size:12px; }
+    .content { max-width:1450px; padding:30px 34px 50px; margin:auto; }
+    .view { display:none; animation:fade .22s ease-out; }
+    .view.active { display:block; }
+    @keyframes fade { from { opacity:.3; transform:translateY(4px); } to { opacity:1; transform:none; } }
+    .hero { display:flex; justify-content:space-between; align-items:end; gap:20px; padding:28px; border:1px solid rgba(96,165,250,.22); border-radius:16px; background:radial-gradient(circle at 82% 10%, rgba(34,211,238,.15), transparent 30%), linear-gradient(115deg,#0d1c33,#0b172a); box-shadow:var(--shadow); }
+    .hero h3 { max-width:760px; margin:7px 0 10px; font-size:30px; line-height:1.15; letter-spacing:-.035em; }
+    .hero p { max-width:770px; margin:0; color:#b4c3d8; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .button { border:1px solid transparent; border-radius:9px; padding:10px 14px; color:#031525; background:linear-gradient(135deg,var(--cyan),var(--blue)); font-weight:800; box-shadow:0 8px 22px rgba(34,211,238,.13); }
+    .button:hover { filter:brightness(1.08); }
+    .button:disabled { cursor:wait; opacity:.55; }
+    .button.secondary { color:#dbeafe; background:transparent; border-color:#355071; box-shadow:none; }
+    .button.secondary:hover { background:rgba(255,255,255,.04); }
+    .grid { display:grid; gap:16px; }
+    .kpis { grid-template-columns:repeat(4,minmax(0,1fr)); margin:20px 0; }
+    .split { grid-template-columns:minmax(300px,.9fr) minmax(0,1.6fr); }
+    .split-even { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .card { min-width:0; padding:19px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg,rgba(16,31,53,.93),rgba(10,23,42,.93)); box-shadow:0 8px 25px rgba(0,0,0,.1); }
+    .card h3, .card h4 { margin:0; color:#f8fbff; font-size:14px; }
+    .card p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .kpi-label { color:var(--muted); font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .kpi-value { margin-top:8px; font-size:25px; font-weight:800; letter-spacing:-.035em; }
+    .kpi-sub { margin-top:2px; color:var(--dim); font-size:12px; }
+    .cyan { color:var(--cyan); } .green { color:var(--green); } .amber { color:var(--amber); } .rose { color:var(--rose); } .violet { color:var(--violet); }
+    .drop-zone { display:grid; place-items:center; min-height:184px; margin-top:17px; padding:23px; border:1.5px dashed #3a5377; border-radius:12px; text-align:center; background:rgba(34,211,238,.025); }
+    .drop-zone strong { display:block; margin-top:8px; }
+    .drop-zone span { color:var(--muted); font-size:12px; }
+    .drop-zone input { display:none; }
+    .mini-note { margin-top:13px; padding:10px; border-left:2px solid var(--cyan); border-radius:0 7px 7px 0; color:#b6c9df; background:rgba(34,211,238,.055); font-size:12px; }
+    .checklist { display:grid; gap:11px; margin-top:17px; }
+    .check { display:flex; gap:9px; align-items:start; color:#cbd5e1; font-size:12px; }
+    .check b { color:var(--green); }
+    .dataset-table { width:100%; border-collapse:collapse; margin-top:15px; font-size:12px; }
+    .dataset-table th { padding:9px; color:var(--muted); background:rgba(255,255,255,.025); text-align:left; font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
+    .dataset-table td { max-width:160px; padding:9px; overflow:hidden; border-top:1px solid rgba(34,48,71,.7); text-overflow:ellipsis; white-space:nowrap; color:#cbd5e1; }
+    .table-wrap { overflow:auto; }
+    .statusline { display:flex; justify-content:space-between; gap:10px; margin-top:14px; color:var(--muted); font-size:12px; }
+    .model-card { position:relative; overflow:hidden; }
+    .model-card::before { position:absolute; top:0; left:0; width:100%; height:3px; content:""; background:var(--cyan); }
+    .model-card.alex::before { background:var(--violet); }
+    .model-name { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .model-name strong { font-size:18px; letter-spacing:-.025em; }
+    .model-card ul { margin:14px 0 0; padding-left:17px; color:var(--muted); font-size:12px; }
+    .model-card li+li { margin-top:4px; }
+    .metric-table { width:100%; border-collapse:collapse; margin-top:17px; font-size:12px; }
+    .metric-table th { color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.06em; text-align:left; text-transform:uppercase; }
+    .metric-table th, .metric-table td { padding:10px 8px; border-bottom:1px solid rgba(34,48,71,.8); }
+    .metric-table td { color:#dbeafe; }
+    .metric-table tr.champion td { color:#f0fdfa; background:rgba(34,211,238,.045); }
+    .metric-table tr.champion td:first-child { border-left:2px solid var(--cyan); }
+    .bar-list { display:grid; gap:12px; margin-top:16px; }
+    .bar-label { display:flex; justify-content:space-between; gap:10px; color:#cbd5e1; font-size:12px; }
+    .bar-track { height:7px; margin-top:5px; overflow:hidden; border-radius:99px; background:#182840; }
+    .bar-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--violet),var(--cyan)); }
+    .metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:16px; }
+    .metric { padding:12px; border:1px solid rgba(58,83,119,.6); border-radius:9px; background:rgba(255,255,255,.018); }
+    .metric span { display:block; color:var(--muted); font-size:10px; letter-spacing:.05em; text-transform:uppercase; }
+    .metric b { display:block; margin-top:3px; font-size:18px; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:16px; }
+    .field { display:grid; gap:6px; }
+    .field label { overflow:hidden; color:#cbd5e1; font-size:12px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .field input, .field select { width:100%; padding:9px 10px; border:1px solid #355071; border-radius:8px; outline:none; color:#eef7ff; background:#09172a; }
+    .field input:focus, .field select:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(34,211,238,.1); }
+    .risk-box { display:grid; place-items:center; min-height:205px; text-align:center; }
+    .risk-number { margin:8px 0; font-size:58px; font-weight:850; letter-spacing:-.075em; }
+    .risk-tag { padding:5px 9px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:12px; }
+    .results-list { display:grid; gap:9px; margin-top:13px; }
+    .result-row { padding:11px; border:1px solid rgba(58,83,119,.65); border-radius:9px; background:rgba(255,255,255,.02); }
+    .result-row-top { display:flex; justify-content:space-between; gap:12px; align-items:center; color:#dbeafe; font-size:12px; }
+    .result-row p { margin:3px 0 0; color:var(--muted); font-size:11px; }
+    .empty { padding:22px 5px; color:var(--dim); font-size:12px; }
+    .notice { margin-top:16px; padding:13px; border:1px solid rgba(251,191,36,.27); border-radius:9px; color:#fde68a; background:rgba(251,191,36,.06); font-size:12px; }
+    
+    /* Confusion Matrix */
+    .confusion-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+    .cm-cell { padding:14px; border-radius:10px; border:1px solid var(--line); display:flex; flex-direction:column; gap:4px; }
+    .cm-cell strong { font-size:24px; font-weight:800; letter-spacing:-.03em; }
+    .cm-cell small { color:var(--muted); font-size:11px; }
+    .cm-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+    .cm-desc { font-size:11px; color:var(--dim); margin-top:2px; }
+    .cm-tn { background:rgba(52,211,153,.05); border-color:rgba(52,211,153,.3); }
+    .cm-tn .cm-label, .cm-tn strong { color:var(--green); }
+    .cm-fp { background:rgba(251,191,36,.05); border-color:rgba(251,191,36,.3); }
+    .cm-fp .cm-label, .cm-fp strong { color:var(--amber); }
+    .cm-fn { background:rgba(251,113,133,.05); border-color:rgba(251,113,133,.3); }
+    .cm-fn .cm-label, .cm-fn strong { color:var(--rose); }
+    .cm-tp { background:rgba(34,211,238,.05); border-color:rgba(34,211,238,.3); }
+    .cm-tp .cm-label, .cm-tp strong { color:var(--cyan); }
+
+    /* ROC Curve */
+    .roc-wrapper { width:100%; margin-top:12px; }
+    .roc-chart { width:100%; height:auto; display:block; overflow:visible; }
+    .roc-legend { display:flex; justify-content:center; gap:20px; font-size:11px; color:var(--muted); margin-top:8px; }
+
+    /* Diff Card */
+    .diff-card { border-color:rgba(34,211,238,.3); background:linear-gradient(145deg, rgba(34,211,238,.04), rgba(16,31,53,.9)); }
+    .diff-grid { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap; }
+    .diff-box { padding:10px 14px; border-radius:8px; background:rgba(255,255,255,.03); border:1px solid var(--line); flex:1; min-width:110px; }
+    .diff-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); display:block; }
+    .diff-val { font-size:20px; font-weight:800; display:block; margin-top:2px; }
+    .diff-arrow { font-size:18px; color:var(--cyan); font-weight:800; }
+    .diff-delta { padding:10px 16px; border-radius:8px; background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.4); flex:1.2; min-width:130px; }
+    .diff-delta-val { font-size:18px; font-weight:800; color:var(--green); display:block; margin-top:2px; }
+
+    .hidden { display:none !important; }
+    #toast-region { position:fixed; right:18px; bottom:18px; z-index:10; display:grid; gap:8px; max-width:340px; }
+    .toast { padding:11px 13px; border:1px solid #3a5377; border-radius:9px; color:#dbeafe; background:#0d1a2d; box-shadow:var(--shadow); font-size:12px; }
+    .toast.error { border-color:rgba(251,113,133,.6); color:#fecdd3; } .toast.success { border-color:rgba(52,211,153,.55); color:#bbf7d0; }
+    @media (max-width:960px) { .app{grid-template-columns:1fr}.sidebar{position:relative;height:auto;padding:14px}.brand{padding-bottom:12px}.model-chip,.sidebar-footer{display:none}.nav{display:flex;overflow:auto;margin-top:10px}.nav button{min-width:max-content}.topbar{padding:15px 18px}.content{padding:20px 18px}.kpis,.split,.split-even{grid-template-columns:1fr 1fr}.hero{align-items:start;flex-direction:column}.hero h3{font-size:25px} }
+    @media (max-width:620px) { .topbar{align-items:start;flex-direction:column}.kpis,.split,.split-even,.form-grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.content{padding:16px}.hero{padding:20px}.hero h3{font-size:23px}.topbar h2{font-size:14px} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">K</div>
+        <div><h1>Kaizen</h1><p>Retention Intelligence</p></div>
+      </div>
+      <div class="model-chip">
+        <div class="eyebrow">Dual classifier lab</div>
+        <div class="model-row"><span><i class="dot"></i>PorusXS</span><small>Random Forest</small></div>
+        <div class="model-row"><span><i class="dot violet"></i>AlexzanderXS</span><small>Gradient Boosting</small></div>
+      </div>
+      <nav class="nav">
+        <button class="active" data-view="overview"><span class="nav-icon">▦</span>Overview</button>
+        <button data-view="models"><span class="nav-icon">◫</span>Model Laboratory</button>
+        <button data-view="simulator"><span class="nav-icon">◎</span>Risk Simulator</button>
+      </nav>
+      <div class="sidebar-footer">AI Application Lab<br>CU CSE — AI &amp; ML</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><h2 id="page-title">Employee Turnover &amp; Workforce Retention</h2><p id="page-subtitle">An evaluated binary-classification workflow for proactive HR support.</p></div>
+        <span class="pill" id="api-status"><span class="dot"></span>Checking API</span>
+      </header>
+
+      <div class="content">
+        <section class="view active" id="view-overview">
+          <div class="hero">
+            <div>
+              <div class="eyebrow">AI Application Lab · Supervised learning</div>
+              <h3>Identify attrition risk early, understand the model signals, and support retention conversations.</h3>
+              <p>Kaizen trains two classifiers, tests them on employees they did not see during training, and uses the best validated model for a transparent risk simulation.</p>
+            </div>
+            <div class="actions">
+              <button class="button" id="load-demo" type="button">Load academic demo</button>
+              <button class="button secondary" data-go="models">View model lab</button>
+            </div>
+          </div>
+
+          <div class="grid kpis">
+            <div class="card"><div class="kpi-label">Workforce rows</div><div class="kpi-value" id="kpi-rows">—</div><div class="kpi-sub" id="kpi-source">Awaiting dataset</div></div>
+            <div class="card"><div class="kpi-label">Attrition baseline</div><div class="kpi-value rose" id="kpi-attrition">—</div><div class="kpi-sub">Share of employees labelled as leaving</div></div>
+            <div class="card"><div class="kpi-label">Champion model</div><div class="kpi-value cyan" id="kpi-champion">—</div><div class="kpi-sub" id="kpi-validation">Needs validation</div></div>
+            <div class="card"><div class="kpi-label">Holdout ROC-AUC</div><div class="kpi-value green" id="kpi-auc">—</div><div class="kpi-sub">Measured on unseen records</div></div>
+          </div>
+
+          <div class="grid split">
+            <article class="card">
+              <h3>Train with your workforce CSV</h3>
+              <p>Use a dataset containing an <b>Attrition</b>-style column with clear Yes/No or 1/0 labels.</p>
+              <label class="drop-zone" for="dataset-input">
+                <div class="cyan" style="font-size:30px">⇧</div>
+                <strong>Choose a CSV file</strong>
+                <span>Minimum 120 rows · both attrition classes required</span>
+                <input id="dataset-input" type="file" accept=".csv">
+              </label>
+              <div class="statusline"><span id="training-status">Ready to train</span><span id="model-version">No saved model</span></div>
+              <div class="mini-note">Kaizen removes obvious identifier/constant columns, imputes missing feature values within the pipeline, and keeps a stratified holdout set for evaluation.</div>
+            </article>
+            <article class="card">
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:start"><div><h3>Dataset preview</h3><p>The first 15 raw rows from your latest training dataset.</p></div><span class="pill" id="target-chip">Target: Attrition</span></div>
+              <div class="table-wrap"><table class="dataset-table"><thead id="preview-head"><tr><th>Awaiting data</th></tr></thead><tbody id="preview-body"><tr><td class="empty">Upload a CSV to inspect the dataset.</td></tr></tbody></table></div>
+            </article>
+          </div>
+
+          <article class="card" style="margin-top:16px">
+            <h3>High-Risk Employees List</h3>
+            <p id="high-risk-caption">Employees at or above the model's decision threshold, ranked by predicted probability.</p>
+            <div class="table-wrap"><table class="dataset-table"><thead><tr><th>Employee ID / row</th><th>Department</th><th>Role</th><th>Risk Score</th><th>Key Drivers Pushing Departure</th><th>Simulation</th></tr></thead><tbody id="high-risk-body"><tr><td colspan="6" class="empty">Train a model to see at-risk employees.</td></tr></tbody></table></div>
+          </article>
+
+          <div class="grid split-even" style="margin-top:16px">
+            <article class="card model-card">
+              <div class="model-name"><strong>PorusXS</strong><span class="pill">Candidate 01</span></div>
+              <p>Balanced Random Forest classifier.</p>
+              <ul><li>Captures nonlinear attrition patterns</li><li>Balances minority attrition examples</li><li>Reports probability of leaving</li></ul>
+            </article>
+            <article class="card model-card alex">
+              <div class="model-name"><strong>AlexzanderXS</strong><span class="pill">Candidate 02</span></div>
+              <p>Gradient Boosting classifier.</p>
+              <ul><li>Finds sequential, subtle risk interactions</li><li>Trained with balanced sample weights</li><li>Compared fairly on the same holdout split</li></ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-models">
+          <div class="hero">
+            <div><div class="eyebrow">Evaluation before deployment</div><h3 style="font-size:26px">Model Laboratory</h3><p id="validation-note">Train a dataset to view the out-of-sample evaluation report.</p></div>
+            <button class="button secondary" data-go="simulator">Open simulator</button>
+          </div>
+          <div class="grid split" style="margin-top:18px">
+            <article class="card">
+              <h3>Champion holdout metrics</h3>
+              <p>These values are never calculated on the same rows used for training.</p>
+              <div class="metric-grid">
+                <div class="metric"><span>ROC-AUC</span><b class="cyan" id="metric-auc">—</b></div>
+                <div class="metric"><span>PR-AUC</span><b class="violet" id="metric-prauc">—</b></div>
+                <div class="metric"><span>F1 score</span><b id="metric-f1">—</b></div>
+                <div class="metric"><span>Precision</span><b id="metric-precision">—</b></div>
+                <div class="metric"><span>Recall</span><b class="green" id="metric-recall">—</b></div>
+                <div class="metric"><span>Balanced accuracy</span><b id="metric-balanced">—</b></div>
+              </div>
+              <div class="notice">Interpret the result as a decision-support signal, not an automated hiring, firing, or promotion decision. Model importance is not proof of causality.</div>
+            </article>
+            <article class="card">
+              <h3>Feature importance</h3>
+              <p>Global importance from the active model, grouped back to original dataset columns.</p>
+              <div class="bar-list" id="importance-list"><div class="empty">Train a model to view importance.</div></div>
+            </article>
+          </div>
+
+          <div class="grid split-even" style="margin-top:16px">
+            <article class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <h3>Holdout Confusion Matrix</h3>
+                  <p>Evaluated on unseen test records (Decision threshold: <span id="cm-threshold">50%</span>)</p>
+                </div>
+                <span class="pill live" id="cm-accuracy-pill">Accuracy: —</span>
+              </div>
+              <div class="confusion-grid">
+                <div class="cm-cell cm-tn">
+                  <span class="cm-label">True Negative (Stay)</span>
+                  <strong id="cm-tn-val">—</strong>
+                  <small id="cm-tn-pct">— of holdout</small>
+                  <span class="cm-desc">Correctly predicted to stay</span>
+                </div>
+                <div class="cm-cell cm-fp">
+                  <span class="cm-label">False Alarm (Type I)</span>
+                  <strong id="cm-fp-val">—</strong>
+                  <small id="cm-fp-pct">— of holdout</small>
+                  <span class="cm-desc">Predicted leave, actually stayed</span>
+                </div>
+                <div class="cm-cell cm-fn">
+                  <span class="cm-label">Missed Risk (Type II)</span>
+                  <strong id="cm-fn-val">—</strong>
+                  <small id="cm-fn-pct">— of holdout</small>
+                  <span class="cm-desc">Predicted stay, actually left</span>
+                </div>
+                <div class="cm-cell cm-tp">
+                  <span class="cm-label">True Positive (Catch)</span>
+                  <strong id="cm-tp-val">—</strong>
+                  <small id="cm-tp-pct">— of holdout</small>
+                  <span class="cm-desc">Correctly intercepted departure</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <h3>ROC Discrimination Curve</h3>
+                  <p>Sensitivity vs False Alarm Rate across all thresholds</p>
+                </div>
+                <span class="pill live cyan" id="roc-auc-badge">ROC-AUC: —</span>
+              </div>
+              <div class="roc-wrapper">
+                <svg id="roc-svg" viewBox="0 0 320 190" class="roc-chart"></svg>
+              </div>
+              <div class="roc-legend">
+                <span><i class="dot"></i>Champion ROC</span>
+                <span><span style="border-bottom:1px dashed var(--dim);width:14px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Random Chance (0.50)</span>
+              </div>
+            </article>
+          </div>
+
+          <article class="card" style="margin-top:16px">
+            <h3>PorusXS vs AlexzanderXS</h3>
+            <p>Both candidates train on the identical training split and are compared with PR-AUC first, because attrition is commonly imbalanced.</p>
+            <div class="table-wrap"><table class="metric-table"><thead><tr><th>Model</th><th>Algorithm</th><th>ROC-AUC</th><th>PR-AUC</th><th>F1</th><th>Recall</th><th>Decision</th></tr></thead><tbody id="comparison-body"><tr><td colspan="7" class="empty">No evaluation report yet.</td></tr></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-simulator">
+          <div class="hero">
+            <div><div class="eyebrow">Single employee inference</div><h3 style="font-size:26px">Attrition Risk Simulator</h3><p>Complete the profile using the exact fields from the trained dataset. Kaizen will report a probability, local model signals, and support-oriented follow-up ideas.</p></div>
+            <span class="pill" id="active-model-pill">No active model</span>
+          </div>
+          <div class="grid split" style="margin-top:18px">
+            <article class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:9px 12px;border:1px solid #355071;border-radius:9px;background:rgba(255,255,255,.02)">
+                <span class="eyebrow" style="color:var(--cyan)">⚡ Quick-Load Employee:</span>
+                <select id="preset-selector" style="padding:6px 10px;border-radius:8px;border:1px solid #355071;background:#09172a;color:#eef7ff;font-size:12px;max-width:320px">
+                  <option value="default">Typical Workforce Baseline</option>
+                </select>
+              </div>
+              <h3>Employee profile</h3>
+              <p id="form-caption">Train a CSV to generate a matching form.</p>
+              <form id="profile-form"><div class="form-grid" id="profile-fields"></div><button class="button" style="width:100%;margin-top:17px" type="submit">Calculate attrition risk</button></form>
+            </article>
+            <div class="grid" style="gap:16px">
+              <article class="card diff-card" id="counter-offer-card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <h3 style="color:var(--cyan)">⚡ Counter-Offer Impact (What-If Delta)</h3>
+                    <p>Real-time impact of simulated adjustments against baseline profile.</p>
+                  </div>
+                  <span class="pill" id="diff-status-pill">Awaiting baseline</span>
+                </div>
+                <div class="diff-grid">
+                  <div class="diff-box">
+                    <span class="diff-label">Baseline Risk</span>
+                    <b class="diff-val" id="baseline-risk-val">—</b>
+                  </div>
+                  <div class="diff-arrow">➜</div>
+                  <div class="diff-box">
+                    <span class="diff-label">Simulated Risk</span>
+                    <b class="diff-val" id="simulated-risk-val">—</b>
+                  </div>
+                  <div class="diff-delta" id="diff-delta-box">
+                    <span class="diff-label">Net Flight Risk Change</span>
+                    <b class="diff-delta-val" id="diff-delta-val">0.0 pts</b>
+                  </div>
+                </div>
+              </article>
+              <article class="card risk-box">
+                <div class="eyebrow">Predicted probability of leaving</div>
+                <div class="risk-number" id="risk-number">—</div>
+                <span class="risk-tag" id="risk-status">Awaiting profile</span>
+                <p id="prediction-model" style="margin-top:10px"></p>
+              </article>
+              <div class="grid split-even">
+                <article class="card" id="financial-card">
+                  <h3>Estimated capital impact</h3><p>Planning estimate using 1.5× annual salary replacement cost.</p>
+                  <div class="results-list"><div class="result-row"><div class="result-row-top"><span>Replacement cost</span><b class="rose" id="turnover-cost">—</b></div></div><div class="result-row"><div class="result-row-top"><span>Retention support cost</span><b id="retention-cost">—</b></div></div><div class="result-row"><div class="result-row-top"><span>Potential capital retained</span><b class="green" id="savings-cost">—</b></div></div></div>
+                </article>
+                <article class="card">
+                  <h3>How to use the score</h3>
+                  <div class="checklist"><div class="check"><b>01</b><span>Use it to prioritise a confidential stay conversation.</span></div><div class="check"><b>02</b><span>Validate signals with the employee and manager.</span></div><div class="check"><b>03</b><span>Track outcomes before changing policy.</span></div></div>
+                </article>
+              </div>
+            </div>
+          </div>
+          <div class="grid split-even" style="margin-top:16px">
+            <article class="card"><h3>Local model signals</h3><p>Each signal compares this profile with a typical reference value. It is not causal proof.</p><div class="results-list" id="drivers-list"><div class="empty">Run a prediction to view model signals.</div></div></article>
+            <article class="card"><h3>Support-oriented next steps</h3><p>Use recommendations as discussion prompts, not automatic decisions.</p><div class="results-list" id="prescriptions-list"><div class="empty">Run a prediction to view next steps.</div></div></article>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div id="toast-region" aria-live="polite"></div>
+
+  <script>
+    const state = { featureSchema: [], activeModel: null, highRiskEmployees: [], baselineRisk: null, decisionThreshold: 0.5 };
+    const pageMeta = {
+      overview: ["Employee Turnover & Workforce Retention", "An evaluated binary-classification workflow for proactive HR support."],
+      models: ["Model Laboratory", "Compare both candidates on an unseen, stratified holdout set."],
+      simulator: ["Attrition Risk Simulator", "Generate a transparent decision-support signal from the trained model."]
+    };
+    const q = (selector) => document.querySelector(selector);
+    const money = (value) => "$" + Number(value).toLocaleString();
+
+    function toast(message, type) {
+      const item = document.createElement("div");
+      item.className = "toast " + (type || "");
+      item.textContent = message;
+      q("#toast-region").appendChild(item);
+      window.setTimeout(() => item.remove(), 5000);
+    }
+    async function errorMessage(response) {
+      try { const data = await response.json(); return data.detail || "Request failed (" + response.status + ")"; }
+      catch (_) { return "Request failed (" + response.status + ")"; }
+    }
+    function setView(view) {
+      document.querySelectorAll(".view").forEach((item) => item.classList.toggle("active", item.id === "view-" + view));
+      document.querySelectorAll(".nav button").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+      q("#page-title").textContent = pageMeta[view][0];
+      q("#page-subtitle").textContent = pageMeta[view][1];
+    }
+    document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+    document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.go)));
+
+    function setText(id, value) { q(id).textContent = value; }
+    function setMetric(id, value) { setText(id, value === undefined || value === null ? "—" : Number(value).toFixed(3)); }
+    function createCell(value, header) {
+      const cell = document.createElement(header ? "th" : "td");
+      cell.textContent = value === null || value === undefined || value === "" ? "—" : String(value);
+      return cell;
+    }
+    function showPreview(rows) {
+      const head = q("#preview-head"), body = q("#preview-body");
+      head.replaceChildren(); body.replaceChildren();
+      if (!rows || !rows.length) { const row = document.createElement("tr"); const cell = createCell("No preview rows available."); cell.colSpan = 1; row.appendChild(cell); body.appendChild(row); return; }
+      const columns = Object.keys(rows[0]).slice(0, 8);
+      const headerRow = document.createElement("tr");
+      columns.forEach((column) => headerRow.appendChild(createCell(column, true)));
+      head.appendChild(headerRow);
+      rows.forEach((rowData) => { const row = document.createElement("tr"); columns.forEach((column) => row.appendChild(createCell(rowData[column]))); body.appendChild(row); });
+    }
+    function showComparison(items, active) {
+      const body = q("#comparison-body"); body.replaceChildren();
+      if (!items || !items.length) { const row = document.createElement("tr"); const cell = createCell("No evaluation report yet."); cell.colSpan = 7; row.appendChild(cell); body.appendChild(row); return; }
+      items.forEach((item) => {
+        const row = document.createElement("tr");
+        if (item.model_name === active) row.className = "champion";
+        [item.model_name, item.algorithm, item.roc_auc, item.pr_auc, item.f1, item.recall, item.model_name === active ? "Champion" : "Candidate"].forEach((value) => row.appendChild(createCell(typeof value === "number" ? value.toFixed(3) : value)));
+        body.appendChild(row);
+      });
+    }
+    function showImportances(items) {
+      const list = q("#importance-list"); list.replaceChildren();
+      if (!items || !items.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No importance report is available."; list.appendChild(empty); return; }
+      items.slice(0, 8).forEach((item) => {
+        const wrap = document.createElement("div"), label = document.createElement("div"), track = document.createElement("div"), fill = document.createElement("div");
+        label.className = "bar-label"; label.append(createCell(item.feature), createCell(item.importance.toFixed(1) + "%"));
+        track.className = "bar-track"; fill.className = "bar-fill"; fill.style.width = Math.min(100, item.importance) + "%"; track.appendChild(fill); wrap.append(label, track); list.appendChild(wrap);
+      });
+    }
+    function renderConfusionMatrix(cm, threshold) {
+      if (!cm) return;
+      const total = (cm.tn + cm.fp + cm.fn + cm.tp) || 1;
+      setText("#cm-tn-val", cm.tn.toLocaleString());
+      setText("#cm-tn-pct", ((cm.tn / total) * 100).toFixed(1) + "% of holdout");
+      setText("#cm-fp-val", cm.fp.toLocaleString());
+      setText("#cm-fp-pct", ((cm.fp / total) * 100).toFixed(1) + "% of holdout");
+      setText("#cm-fn-val", cm.fn.toLocaleString());
+      setText("#cm-fn-pct", ((cm.fn / total) * 100).toFixed(1) + "% of holdout");
+      setText("#cm-tp-val", cm.tp.toLocaleString());
+      setText("#cm-tp-pct", ((cm.tp / total) * 100).toFixed(1) + "% of holdout");
+      const acc = (((cm.tn + cm.tp) / total) * 100).toFixed(2);
+      setText("#cm-accuracy-pill", "Holdout Acc: " + acc + "%");
+      if (threshold !== undefined) {
+        setText("#cm-threshold", (Number(threshold) * 100).toFixed(1) + "%");
+      }
+    }
+
+    function renderRocCurve(points, auc) {
+      const svg = q("#roc-svg");
+      if (!svg) return;
+      setText("#roc-auc-badge", "ROC-AUC: " + Number(auc).toFixed(4));
+
+      const x0 = 38, x1 = 308, y0 = 162, y1 = 14;
+      const width = x1 - x0, height = y0 - y1;
+
+      let svgHtml = `
+        <defs>
+          <linearGradient id="roc-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        <!-- Grid lines -->
+        <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="#223047" stroke-width="1"/>
+        <line x1="${x0}" y1="${y0 - height*0.5}" x2="${x1}" y2="${y0 - height*0.5}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
+        <line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
+        
+        <line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="#223047" stroke-width="1"/>
+        <line x1="${x0 + width*0.5}" y1="${y0}" x2="${x0 + width*0.5}" y2="${y1}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
+        <line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
+
+        <!-- Axis Labels -->
+        <text x="${x0}" y="${y0 + 16}" fill="#64748b" font-size="9">0.0</text>
+        <text x="${x0 + width*0.5 - 12}" y="${y0 + 16}" fill="#64748b" font-size="9">0.5 (FPR)</text>
+        <text x="${x1 - 14}" y="${y0 + 16}" fill="#64748b" font-size="9">1.0</text>
+        <text x="12" y="${y0}" fill="#64748b" font-size="9">0.0</text>
+        <text x="12" y="${y0 - height*0.5 + 3}" fill="#64748b" font-size="9">0.5</text>
+        <text x="12" y="${y1 + 4}" fill="#64748b" font-size="9">1.0</text>
+
+        <!-- Random chance diagonal -->
+        <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4"/>
+      `;
+
+      if (points && points.length > 0) {
+        let pathD = `M ${x0} ${y0}`;
+        let areaD = `M ${x0} ${y0}`;
+        points.forEach(pt => {
+          const px = x0 + pt.fpr * width;
+          const py = y0 - pt.tpr * height;
+          pathD += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          areaD += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+        });
+        areaD += ` L ${x1} ${y0} Z`;
+
+        svgHtml += `
+          <path d="${areaD}" fill="url(#roc-grad)" />
+          <path d="${pathD}" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        `;
+      }
+      svg.innerHTML = svgHtml;
+    }
+
+    function showMetrics(metrics) {
+      setMetric("#metric-auc", metrics.roc_auc); setMetric("#metric-prauc", metrics.pr_auc); setMetric("#metric-f1", metrics.f1);
+      setMetric("#metric-precision", metrics.precision); setMetric("#metric-recall", metrics.recall); setMetric("#metric-balanced", metrics.balanced_accuracy);
+      setText("#kpi-auc", metrics.roc_auc === undefined ? "—" : Number(metrics.roc_auc).toFixed(3));
+      
+      state.decisionThreshold = metrics.decision_threshold !== undefined ? metrics.decision_threshold : 0.5;
+      if (metrics.confusion) {
+        renderConfusionMatrix(metrics.confusion, state.decisionThreshold);
+      }
+      if (metrics.roc_curve && metrics.roc_curve.length > 0) {
+        renderRocCurve(metrics.roc_curve, metrics.roc_auc || 0);
+      }
+    }
+    function buildProfileForm(schema) {
+      state.featureSchema = schema || [];
+      const fields = q("#profile-fields"); fields.replaceChildren();
+      if (!state.featureSchema.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No trained feature schema is available."; fields.appendChild(empty); return; }
+      state.featureSchema.forEach((feature) => {
+        const wrap = document.createElement("div"), label = document.createElement("label"), control = document.createElement(feature.kind === "category" ? "select" : "input");
+        wrap.className = "field"; label.textContent = feature.name; label.htmlFor = "field-" + feature.name; control.id = "field-" + feature.name; control.name = feature.name; control.required = true;
+        if (feature.kind === "number") { control.type = "number"; control.step = "any"; control.value = feature.default; }
+        else {
+          const choices = feature.choices && feature.choices.length ? feature.choices : [feature.default];
+          choices.forEach((choice) => { const option = document.createElement("option"); option.value = choice; option.textContent = choice; if (String(choice) === String(feature.default)) option.selected = true; control.appendChild(option); });
+        }
+        wrap.append(label, control); fields.appendChild(wrap);
+      });
+      setText("#form-caption", "The form contains " + state.featureSchema.length + " fields from the active model.");
+    }
+    function applyResult(result) {
+      state.activeModel = result.active_model;
+      setText("#kpi-champion", result.active_model || "—");
+      setText("#kpi-validation", result.validation ? result.validation.method : "Holdout validation");
+      setText("#active-model-pill", result.active_model ? "Champion: " + result.active_model : "No active model");
+      setText("#model-version", result.model_version ? "Model " + result.model_version : "No saved model");
+      setText("#validation-note", result.validation ? result.validation.note + " " + result.validation.training_rows + " train / " + result.validation.holdout_rows + " holdout rows." : "Train a dataset to view the out-of-sample evaluation report.");
+      showMetrics(result.metrics || {}); showComparison(result.model_comparison, result.active_model); showImportances(result.importances); buildProfileForm(result.feature_schema);
+      // Automatically compute live simulation so the simulator view is never blank
+      calculateSimulation();
+    }
+    function showHighRisk(employees, threshold) {
+      state.highRiskEmployees = employees || [];
+      const body = q("#high-risk-body"); body.replaceChildren();
+      const thresholdPct = Number(threshold === undefined ? .5 : threshold) * 100;
+      setText("#high-risk-caption", "Employees ranked by predicted departure probability (decision threshold: " + thresholdPct.toFixed(0) + "%).");
+
+      updatePresetSelector(state.highRiskEmployees);
+
+      if (!employees || !employees.length) { const row = document.createElement("tr"); const cell = createCell("No employees evaluated in high-risk scope."); cell.colSpan = 6; row.appendChild(cell); body.appendChild(row); return; }
+      employees.forEach((emp) => {
+        const row = document.createElement("tr");
+        let driversText = "";
+        if (emp.drivers && emp.drivers.length > 0) {
+           driversText = emp.drivers.map(d => d.feature + " (" + (d.impact > 0 ? "+" : "") + Number(d.impact).toFixed(1) + " pts)").join(", ");
+        } else {
+           driversText = "Key factors balanced near baseline";
+        }
+        [emp.id, emp.department, emp.job_role, (Number(emp.risk_score) * 100).toFixed(1) + "%", driversText].forEach((value) => {
+            const cell = createCell(value);
+            if (value && String(value).endsWith("%")) cell.className = "rose";
+            row.appendChild(cell);
+        });
+
+        // Interactive Simulate button in the table
+        const actionTd = document.createElement("td");
+        const simBtn = document.createElement("button");
+        simBtn.type = "button";
+        simBtn.className = "button secondary";
+        simBtn.style.padding = "4px 9px";
+        simBtn.style.fontSize = "11px";
+        simBtn.style.whiteSpace = "nowrap";
+        simBtn.textContent = "Simulate ➜";
+        simBtn.onclick = () => loadEmployeeToSimulator(emp.id);
+        actionTd.appendChild(simBtn);
+        row.appendChild(actionTd);
+
+        body.appendChild(row);
+      });
+    }
+
+    function updatePresetSelector(employees) {
+      const select = q("#preset-selector");
+      if (!select) return;
+      select.replaceChildren();
+      const defOpt = document.createElement("option");
+      defOpt.value = "default";
+      defOpt.textContent = "Typical Workforce Baseline (Median/Mode)";
+      select.appendChild(defOpt);
+
+      (employees || []).forEach((emp) => {
+        const opt = document.createElement("option");
+        opt.value = emp.id;
+        opt.textContent = `${emp.id} · ${(emp.risk_score * 100).toFixed(1)}% Risk (${emp.job_role || emp.department || 'Employee'})`;
+        select.appendChild(opt);
+      });
+
+      select.onchange = () => {
+        if (select.value === "default") {
+          resetSimulatorToDefaults();
+        } else {
+          loadEmployeeToSimulator(select.value);
+        }
+      };
+    }
+
+    function resetSimulatorToDefaults() {
+      state.baselineRisk = null;
+      (state.featureSchema || []).forEach(f => {
+        const el = q(`#field-${f.name}`);
+        if (el) el.value = f.default;
+      });
+      calculateSimulation();
+    }
+
+    function loadEmployeeToSimulator(empId) {
+      const emp = (state.highRiskEmployees || []).find(e => e.id === empId);
+      if (!emp) return;
+      setView("simulator");
+      state.baselineRisk = null;
+      if (emp.profile) {
+        for (const [key, val] of Object.entries(emp.profile)) {
+          const el = q(`#field-${key}`);
+          if (el) el.value = val;
+        }
+      }
+      const select = q("#preset-selector");
+      if (select) select.value = empId;
+      calculateSimulation();
+      toast(`Loaded ${emp.id} into Attrition Risk Simulator`, "success");
+    }
+
+    function applyTrainingData(data) {
+      const t = data.telemetry, result = data.result;
+      setText("#kpi-rows", Number(t.total_rows).toLocaleString()); setText("#kpi-attrition", Number(t.attrition_rate).toFixed(1) + "%");
+      setText("#kpi-source", result.source); setText("#target-chip", "Target: " + t.target);
+      showPreview(data.sample_rows); applyResult(result); showHighRisk(result.high_risk_employees, result.high_risk_threshold);
+      const dropped = t.dropped_columns && t.dropped_columns.length ? " · removed " + t.dropped_columns.length + " non-predictive column(s)" : "";
+      setText("#training-status", "Trained on " + t.total_rows + " records" + dropped);
+    }
+    function applySavedSummary(summary) {
+      if (!summary || !summary.total_rows) return;
+      setText("#kpi-rows", Number(summary.total_rows).toLocaleString());
+      setText("#kpi-attrition", Number(summary.attrition_rate).toFixed(1) + "%");
+      setText("#kpi-source", summary.source || "Saved training dataset");
+      setText("#target-chip", "Target: " + (summary.target || "Attrition"));
+    }
+
+    async function uploadDataset(event) {
+      const file = event.target.files[0]; if (!file) return;
+      const form = new FormData(); form.append("file", file); form.append("target_column", "Attrition"); form.append("task_type", "classification");
+      setText("#training-status", "Training PorusXS and AlexzanderXS on " + file.name + "…");
+      try { 
+        const response = await fetch("/api/upload-and-train", { method:"POST", body:form }); 
+        if (!response.ok) throw new Error(await errorMessage(response)); 
+        const data = await response.json(); 
+        applyTrainingData(data); 
+        toast("Two-model evaluation completed successfully.", "success"); 
+      }
+      catch (error) { 
+        toast(error.message, "error"); 
+        setText("#training-status", "Training failed — review the CSV labels and row count"); 
+      }
+      finally { event.target.value = ""; }
+    }
+    async function loadDemo() {
+      const button = q("#load-demo");
+      button.disabled = true; setText("#training-status", "Training PorusXS and AlexzanderXS on the IBM benchmark demo…");
+      try {
+        const response = await fetch("/api/load-demo", { method: "POST" });
+        if (!response.ok) throw new Error(await errorMessage(response));
+        applyTrainingData(await response.json());
+        toast("IBM HR benchmark demo trained and ready for simulation.", "success");
+      }
+      catch (error) { toast(error.message, "error"); setText("#training-status", "Demo training failed — please try again"); }
+      finally { button.disabled = false; }
+    }
+    function riskLabel(score) {
+      if (score >= .65) return ["Critical follow-up priority", "rose"];
+      if (score >= .40) return ["Elevated follow-up priority", "amber"];
+      return ["Lower current risk signal", "green"];
+    }
+    function renderResults(data) {
+      const [label, color] = riskLabel(data.risk_score);
+      const risk = q("#risk-number"); risk.textContent = data.risk_percentage.toFixed(1) + "%"; risk.className = "risk-number " + color;
+      setText("#risk-status", label); setText("#prediction-model", "Evaluated by " + data.model_name + " · decision threshold " + (data.decision_threshold * 100).toFixed(0) + "%");
+
+      // Before vs. After Counter-Offer Diff Card logic
+      if (state.baselineRisk === null) {
+        state.baselineRisk = data.risk_score;
+        setText("#baseline-risk-val", (data.risk_score * 100).toFixed(1) + "%");
+        setText("#simulated-risk-val", (data.risk_score * 100).toFixed(1) + "%");
+        setText("#diff-delta-val", "0.0 pts (Baseline)");
+        q("#diff-delta-val").style.color = "var(--muted)";
+        q("#diff-delta-box").style.background = "rgba(255,255,255,.02)";
+        q("#diff-delta-box").style.borderColor = "var(--line)";
+        setText("#diff-status-pill", "Baseline Set");
+        q("#diff-status-pill").className = "pill";
+      } else {
+        const delta = (data.risk_score - state.baselineRisk) * 100;
+        setText("#baseline-risk-val", (state.baselineRisk * 100).toFixed(1) + "%");
+        setText("#simulated-risk-val", (data.risk_score * 100).toFixed(1) + "%");
+        const deltaBox = q("#diff-delta-box");
+        const deltaVal = q("#diff-delta-val");
+        const statusPill = q("#diff-status-pill");
+
+        if (delta <= -0.5) {
+          deltaVal.textContent = "▼ " + Math.abs(delta).toFixed(1) + " pts Risk Reduced";
+          deltaVal.style.color = "var(--green)";
+          deltaBox.style.background = "rgba(52,211,153,.1)";
+          deltaBox.style.borderColor = "rgba(52,211,153,.4)";
+          statusPill.textContent = "Counter-Offer Effective";
+          statusPill.className = "pill live";
+        } else if (delta >= 0.5) {
+          deltaVal.textContent = "▲ +" + delta.toFixed(1) + " pts Risk Increased";
+          deltaVal.style.color = "var(--rose)";
+          deltaBox.style.background = "rgba(251,113,133,.1)";
+          deltaBox.style.borderColor = "rgba(251,113,133,.4)";
+          statusPill.textContent = "Elevated Flight Risk";
+          statusPill.className = "pill";
+        } else {
+          deltaVal.textContent = "Balanced (~0 pts)";
+          deltaVal.style.color = "var(--muted)";
+          deltaBox.style.background = "rgba(255,255,255,.02)";
+          deltaBox.style.borderColor = "var(--line)";
+          statusPill.textContent = "Near Baseline";
+          statusPill.className = "pill";
+        }
+      }
+
+      const drivers = q("#drivers-list"), prescriptions = q("#prescriptions-list"); drivers.replaceChildren(); prescriptions.replaceChildren();
+      const driverItems = data.drivers || [], prescriptionItems = data.prescriptions || [];
+      if (!driverItems.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No material risk-increasing signals were identified against the typical profile."; drivers.appendChild(empty); }
+      driverItems.forEach((driver) => {
+        const row = document.createElement("div"), top = document.createElement("div"), feature = document.createElement("span"), impact = document.createElement("b"), description = document.createElement("p");
+        row.className = "result-row"; top.className = "result-row-top"; feature.textContent = driver.feature; 
+        impact.textContent = (driver.impact > 0 ? "+" : "") + Number(driver.impact).toFixed(1) + " pts"; 
+        if (driver.impact <= 0) impact.style.color = "var(--green)";
+        description.textContent = driver.method || "model signal"; top.append(feature, impact); row.append(top, description); drivers.appendChild(row);
+      });
+      if (!prescriptionItems.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No follow-up prompt is suggested because no material risk-increasing signal was found."; prescriptions.appendChild(empty); }
+      prescriptionItems.forEach((item) => {
+        const row = document.createElement("div"), top = document.createElement("div"), title = document.createElement("span"), prompt = document.createElement("b"), description = document.createElement("p");
+        row.className = "result-row"; top.className = "result-row-top"; title.textContent = item.title; prompt.textContent = "Support prompt"; description.textContent = item.action; top.append(title, prompt); row.append(top, description); prescriptions.appendChild(row);
+      });
+      if (data.financials) { q("#financial-card").classList.remove("hidden"); setText("#turnover-cost", money(data.financials.turnover_replacement_cost)); setText("#retention-cost", money(data.financials.retention_intervention_cost)); setText("#savings-cost", money(data.financials.net_capital_saved)); }
+      else { q("#financial-card").classList.add("hidden"); }
+    }
+
+    async function calculateSimulation() {
+      if (!state.featureSchema.length) return;
+      const payload = {};
+      new FormData(q("#profile-form")).forEach((value, key) => payload[key] = value);
+      try {
+        const response = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(await errorMessage(response));
+        renderResults(await response.json());
+      } catch (error) {
+        console.warn("Simulation update error:", error);
+      }
+    }
+
+    async function predict(event) {
+      event.preventDefault();
+      if (!state.featureSchema.length) { toast("Train a dataset first.", "error"); return; }
+      await calculateSimulation();
+    }
+    async function ping() {
+      try { const response = await fetch("/api/health", { cache: "no-store" }); const data = await response.json(); const chip = q("#api-status"); chip.className = "pill live"; chip.textContent = data.trained ? "API online · " + data.active_model + " ready" : "API online · no model trained"; }
+      catch (_) { const chip = q("#api-status"); chip.className = "pill"; chip.textContent = "API offline"; }
+    }
+    async function restoreSavedModel() {
+      try { 
+        const response = await fetch("/api/model-info", { cache: "no-store" }); 
+        if (!response.ok) return; 
+        const data = await response.json(); 
+        applyResult(data); 
+        applySavedSummary(data.training_summary); 
+        showHighRisk(data.high_risk_employees, data.high_risk_threshold); 
+        setText("#training-status", "Restored saved Kaizen model"); 
+      }
+      catch (_) { /* the first-run state is intentionally quiet */ }
+    }
+    q("#dataset-input").addEventListener("change", uploadDataset);
+    q("#load-demo").addEventListener("click", loadDemo);
+    q("#profile-form").addEventListener("submit", predict);
+    q("#profile-form").addEventListener("input", calculateSimulation);
+    q("#profile-form").addEventListener("change", calculateSimulation);
+    ping(); restoreSavedModel(); window.setInterval(ping, 10000);
+  </script>
+</body>
+</html>
