@@ -288,6 +288,204 @@ class KaizenEngine:
         )[:, 1]
         return self._optimal_threshold(y_train, probabilities)
 
+    @staticmethod
+    def _audit_fairness(
+        X_df: pd.DataFrame | None,
+        y_true: np.ndarray,
+        probabilities: np.ndarray,
+        threshold: float,
+    ) -> dict[str, Any] | None:
+        """Audit algorithmic fairness and EEOC disparate impact (Four-Fifths Rule)."""
+        if X_df is None or len(X_df) == 0:
+            return None
+
+        y_true_arr = np.asarray(y_true, dtype=int)
+        n_samples = len(y_true_arr)
+        if n_samples != len(X_df):
+            return None
+
+        predictions = (probabilities >= threshold).astype(int)
+
+        # Identify candidate protected cohorts
+        detected_cohorts: list[tuple[str, pd.Series]] = []
+
+        for col in X_df.columns:
+            norm = str(col).lower().replace("_", "").replace(" ", "").replace("-", "")
+            series = X_df[col]
+
+            if norm in {"gender", "sex"}:
+                detected_cohorts.append(("Gender", series.astype(str).str.strip().str.title()))
+            elif norm in {"age", "ageyears", "yearsold"}:
+                if pd.api.types.is_numeric_dtype(series):
+                    adea = pd.Series(
+                        np.where(series >= 40, "≥ 40 Years (ADEA Protected)", "< 40 Years (Unprotected)"),
+                        index=series.index,
+                    )
+                    detected_cohorts.append(("Age (ADEA Cohorts)", adea))
+
+                    try:
+                        decades = pd.cut(
+                            series,
+                            bins=[0, 29, 39, 49, 120],
+                            labels=["Under 30", "30-39 Years", "40-49 Years", "50+ Years"],
+                        ).astype(str)
+                        detected_cohorts.append(("Age (Decade Bands)", decades))
+                    except Exception:
+                        pass
+            elif norm in {"department", "dept", "businessunit"}:
+                detected_cohorts.append(("Department", series.astype(str).str.strip().str.title()))
+            elif norm in {"maritalstatus", "marital", "civilstatus"}:
+                detected_cohorts.append(("Marital Status", series.astype(str).str.strip().str.title()))
+            elif norm in {"ethnicity", "race"}:
+                detected_cohorts.append(("Ethnicity", series.astype(str).str.strip().str.title()))
+
+        if not detected_cohorts:
+            return None
+
+        attribute_reports: list[dict[str, Any]] = []
+        air_min_list: list[float] = []
+        fpr_disp_list: list[float] = []
+
+        for attr_name, cohort_series in detected_cohorts:
+            val_counts = cohort_series.value_counts()
+            valid_groups = [g for g, c in val_counts.items() if c >= 3 and str(g) not in {"nan", "None", ""}]
+            if len(valid_groups) < 2:
+                continue
+
+            subgroups = []
+            max_sr = 0.0
+            ref_group = valid_groups[0]
+
+            for g in valid_groups:
+                mask = (cohort_series == g).to_numpy()
+                g_count = int(np.sum(mask))
+                if g_count == 0:
+                    continue
+                g_preds = predictions[mask]
+                g_y = y_true_arr[mask]
+
+                sel_count = int(np.sum(g_preds == 1))
+                sr = sel_count / g_count
+                if sr > max_sr:
+                    max_sr = sr
+                    ref_group = str(g)
+
+                tp = int(np.sum((g_y == 1) & (g_preds == 1)))
+                fp = int(np.sum((g_y == 0) & (g_preds == 1)))
+                fn = int(np.sum((g_y == 1) & (g_preds == 0)))
+                tn = int(np.sum((g_y == 0) & (g_preds == 0)))
+
+                tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+                subgroups.append({
+                    "group": str(g),
+                    "sample_count": g_count,
+                    "selection_count": sel_count,
+                    "selection_rate": round(float(sr), 4),
+                    "tpr": round(float(tpr), 4),
+                    "fpr": round(float(fpr), 4),
+                })
+
+            if not subgroups:
+                continue
+
+            attr_air_min = 1.0
+            attr_four_fifths_passed = True
+            all_sr = [sg["selection_rate"] for sg in subgroups]
+            all_tpr = [sg["tpr"] for sg in subgroups]
+            all_fpr = [sg["fpr"] for sg in subgroups]
+
+            for sg in subgroups:
+                air = (sg["selection_rate"] / max_sr) if max_sr > 0 else 1.0
+                air = round(float(air), 4)
+                sg["disparate_impact_ratio"] = air
+                passed = bool(air >= 0.80)
+                sg["four_fifths_passed"] = passed
+                if air >= 0.80:
+                    sg["status"] = "PASS"
+                elif air >= 0.70:
+                    sg["status"] = "WARNING"
+                else:
+                    sg["status"] = "VIOLATION"
+
+                if air < attr_air_min:
+                    attr_air_min = air
+                if not passed:
+                    attr_four_fifths_passed = False
+
+            sp_diff = round(float(max(all_sr) - min(all_sr)), 4)
+            tpr_disp = round(float(max(all_tpr) - min(all_tpr)), 4)
+            fpr_disp = round(float(max(all_fpr) - min(all_fpr)), 4)
+
+            attr_status = "PASS" if attr_four_fifths_passed else ("WARNING" if attr_air_min >= 0.70 else "VIOLATION")
+
+            attribute_reports.append({
+                "attribute_name": attr_name,
+                "subgroups": subgroups,
+                "reference_group": ref_group,
+                "disparate_impact_ratio": round(attr_air_min, 4),
+                "four_fifths_passed": attr_four_fifths_passed,
+                "statistical_parity_diff": sp_diff,
+                "demographic_parity_diff": sp_diff,
+                "tpr_disparity": tpr_disp,
+                "equal_opportunity_diff": tpr_disp,
+                "fpr_disparity": fpr_disp,
+                "predictive_equality_diff": fpr_disp,
+                "status": attr_status,
+            })
+
+            air_min_list.append(attr_air_min)
+            fpr_disp_list.append(fpr_disp)
+
+        if not attribute_reports:
+            return None
+
+        overall_compliant = all(r["four_fifths_passed"] for r in attribute_reports)
+        avg_air = np.mean(air_min_list) if air_min_list else 1.0
+        avg_fpr_disp = np.mean(fpr_disp_list) if fpr_disp_list else 0.0
+        dp_diff_list = [r["demographic_parity_diff"] for r in attribute_reports]
+        tpr_disp_list = [r["equal_opportunity_diff"] for r in attribute_reports]
+
+        base_score = 100.0 * float(avg_air) - 25.0 * float(avg_fpr_disp)
+        if overall_compliant:
+            base_score = max(base_score, 85.0)
+        fairness_score = round(float(np.clip(base_score, 0.0, 100.0)), 1)
+
+        overall_status = "PASS" if overall_compliant else ("WARNING" if fairness_score >= 70.0 else "VIOLATION")
+
+        recs = []
+        for r in attribute_reports:
+            if not r["four_fifths_passed"]:
+                worst_sg = min(r["subgroups"], key=lambda s: s["disparate_impact_ratio"])
+                recs.append(
+                    f"Cohort '{worst_sg['group']}' in '{r['attribute_name']}' exhibits an Adverse Impact Ratio "
+                    f"of {worst_sg['disparate_impact_ratio']:.2f} (< 0.80 threshold). Review decision cutoff."
+                )
+            if r["fpr_disparity"] > 0.08:
+                recs.append(
+                    f"Elevated False Positive Rate disparity ({r['fpr_disparity'] * 100:.1f}%) detected in '{r['attribute_name']}'. "
+                    "Calibrate probability thresholds per cohort to prevent disproportionate retention alerts."
+                )
+
+        if not recs:
+            recs.append(
+                "All evaluated demographic cohorts comply with the EEOC 80% Four-Fifths Rule (29 C.F.R. § 1607.4D). "
+                "Adverse impact ratios remain within standard regulatory tolerances."
+            )
+
+        return {
+            "overall_compliant": overall_compliant,
+            "fairness_score": fairness_score,
+            "status": overall_status,
+            "disparate_impact_ratio": round(float(min(air_min_list)), 4) if air_min_list else 1.0,
+            "demographic_parity_diff": round(float(max(dp_diff_list)), 4) if dp_diff_list else 0.0,
+            "equal_opportunity_diff": round(float(max(tpr_disp_list)), 4) if tpr_disp_list else 0.0,
+            "predictive_equality_diff": round(float(max(fpr_disp_list)), 4) if fpr_disp_list else 0.0,
+            "attributes": attribute_reports,
+            "recommendations": recs,
+        }
+
     # ------------------------------------------------------------------ #
     # Evaluation
     # ------------------------------------------------------------------ #
@@ -299,6 +497,7 @@ class KaizenEngine:
         model_name: str,
         threshold: float,
         hardware_device: str | None = None,
+        X_df: pd.DataFrame | None = None,
     ) -> dict[str, Any]:
         """Compute full classification telemetry on held-out data."""
         y_true_arr = np.asarray(y_true, dtype=int)
@@ -485,6 +684,12 @@ class KaizenEngine:
         )
         algo_name = MODEL_DETAILS.get(model_name, {}).get("algorithm", model_name)
 
+        fairness_audit = (
+            KaizenEngine._audit_fairness(X_df, y_true_arr, probabilities, threshold)
+            if X_df is not None
+            else None
+        )
+
         return {
             "model_name": model_name,
             "algorithm": algo_name,
@@ -512,6 +717,7 @@ class KaizenEngine:
             "brier_decomposition": brier_decomp,
             "baseline_prevalence": round(base_prev, 4),
             "hardware_device": device_tag,
+            "fairness_audit": fairness_audit,
         }
 
     # ------------------------------------------------------------------ #
@@ -566,7 +772,14 @@ class KaizenEngine:
             candidate_thresholds[name] = opt_thresh
 
             dev_tag = "cuda" if name == "AlexzanderXS" and _detect_cuda_device() == "cuda" else "cpu"
-            metrics = self._evaluate(y_holdout, probs, name, threshold=opt_thresh, hardware_device=dev_tag)
+            metrics = self._evaluate(
+                y_holdout,
+                probs,
+                name,
+                threshold=opt_thresh,
+                hardware_device=dev_tag,
+                X_df=X_holdout,
+            )
             comparisons.append(metrics)
             logger.info(
                 "%s (%s) holdout: Acc=%.4f | ROC-AUC=%.4f | PR-AUC=%.4f | F1=%.4f | ECE=%.4f | Thresh=%.3f",

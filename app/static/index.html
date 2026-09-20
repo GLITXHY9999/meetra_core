@@ -435,6 +435,7 @@
                   <button class="curve-tab-btn active" id="tab-curve-roc" onclick="setCurveTab('roc')" type="button">ROC</button>
                   <button class="curve-tab-btn" id="tab-curve-pr" onclick="setCurveTab('pr')" type="button">PR Curve</button>
                   <button class="curve-tab-btn" id="tab-curve-cal" onclick="setCurveTab('cal')" type="button">Calibration</button>
+                  <button class="curve-tab-btn" id="tab-curve-fairness" onclick="setCurveTab('fairness')" type="button">⚖️ Fairness &amp; EEOC</button>
                   <span class="pill live cyan" id="roc-auc-badge">ROC-AUC: —</span>
                 </div>
               </div>
@@ -449,8 +450,138 @@
                 <span><i class="dot" style="background:#a78bfa"></i>PorusXS (Challenger · RF)</span>
                 <span><span style="border-bottom:1px dashed var(--dim);width:14px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Reference Baseline</span>
               </div>
+
+              <div id="fairness-view-container" style="display:none;margin-top:12px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                  <div style="padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border)">
+                    <div class="eyebrow" style="margin-bottom:4px">EEOC 80% Rule Compliance</div>
+                    <div id="fairness-overall-badge" style="font-size:14px;font-weight:700">—</div>
+                  </div>
+                  <div style="padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border)">
+                    <div class="eyebrow" style="margin-bottom:4px">Overall Fairness Index</div>
+                    <div id="fairness-score-val" style="font-size:16px;font-weight:700;color:var(--cyan)">—</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="fairness-cohort-pills"></div>
+
+                <div style="background:#091322;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:12px;font-weight:600" id="fairness-cohort-title">Selection Rates &amp; Adverse Impact</span>
+                    <span style="font-size:11px;color:var(--muted)">Reference group: <b id="fairness-ref-group" style="color:var(--cyan)">—</b></span>
+                  </div>
+                  <div id="fairness-bars-container" style="display:flex;flex-direction:column;gap:8px"></div>
+                </div>
+
+                <div class="table-wrap" style="margin-bottom:12px">
+                  <table class="metric-table" style="font-size:11px">
+                    <thead>
+                      <tr>
+                        <th>Subgroup</th>
+                        <th>Samples</th>
+                        <th>Flagged</th>
+                        <th>Selection Rate</th>
+                        <th>TPR (Recall)</th>
+                        <th>FPR (False Alarm)</th>
+                        <th>Adverse Impact (AIR)</th>
+                        <th>EEOC Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fairness-table-body">
+                      <tr><td colspan="8" class="empty">Loading demographic audit...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style="padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.25)">
+                  <div class="eyebrow" style="color:var(--amber);margin-bottom:4px">⚖️ EEOC Compliance &amp; Legal Risk Guidance</div>
+                  <ul id="fairness-recs-list" style="margin:0;padding-left:16px;font-size:11px;color:var(--muted);line-height:1.6"></ul>
+                </div>
+              </div>
             </article>
           </div>
+
+          <!-- Dedicated Algorithmic Fairness & Bias Audit Section -->
+          <article class="card" id="dedicated-fairness-section" style="margin-top:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+              <div>
+                <div class="eyebrow" style="color:var(--cyan)">Algorithmic Fairness &amp; Bias Auditor</div>
+                <h3 style="font-size:20px;margin-top:2px">Fairness &amp; Bias Audit (EEOC 29 C.F.R. § 1607)</h3>
+                <p>Audits the Four-Fifths Rule (Adverse Impact Ratio), Demographic Parity, and Equal Opportunity across Gender, Age, and Department cohorts.</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="pill" id="eeoc-interactive-badge" style="font-size:12px;padding:6px 14px;font-weight:700;cursor:pointer" onclick="cycleComplianceCohort()" title="Click to cycle demographic cohort">
+                  EEOC: Evaluating...
+                </span>
+                <span class="pill cyan" id="fairness-kpi-score" style="font-size:12px;padding:6px 14px;font-weight:700">
+                  Fairness: — / 100
+                </span>
+              </div>
+            </div>
+
+            <!-- Headline Parity & Compliance KPIs -->
+            <div class="grid kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:14px;gap:10px">
+              <div class="card" style="padding:10px 14px;background:rgba(255,255,255,0.02)">
+                <div class="kpi-label">Four-Fifths Ratio (AIR)</div>
+                <div class="kpi-value cyan" id="kpi-fairness-air" style="font-size:22px">—</div>
+                <div class="kpi-sub">Benchmark: ≥ 80.0% (EEOC Uniform Guidelines)</div>
+              </div>
+              <div class="card" style="padding:10px 14px;background:rgba(255,255,255,0.02)">
+                <div class="kpi-label">Demographic Parity Gap</div>
+                <div class="kpi-value" id="kpi-fairness-dp" style="font-size:22px">—</div>
+                <div class="kpi-sub">Max Selection Rate gap: |SR(A) - SR(B)|</div>
+              </div>
+              <div class="card" style="padding:10px 14px;background:rgba(255,255,255,0.02)">
+                <div class="kpi-label">Equal Opportunity Gap</div>
+                <div class="kpi-value green" id="kpi-fairness-tpr" style="font-size:22px">—</div>
+                <div class="kpi-sub">True Positive Rate gap: |TPR(A) - TPR(B)|</div>
+              </div>
+              <div class="card" style="padding:10px 14px;background:rgba(255,255,255,0.02)">
+                <div class="kpi-label">Predictive Equality Gap</div>
+                <div class="kpi-value violet" id="kpi-fairness-fpr" style="font-size:22px">—</div>
+                <div class="kpi-sub">False Alarm gap: |FPR(A) - FPR(B)|</div>
+              </div>
+            </div>
+
+            <!-- Cohort Selector Tabs -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;border-bottom:1px solid var(--border);padding-bottom:10px" id="dedicated-cohort-tabs"></div>
+
+            <!-- Visual Selection Rate Bar Chart + Legal Advisory -->
+            <div class="grid split" style="margin-top:14px;align-items:start">
+              <div style="background:#091322;border:1px solid var(--border);border-radius:9px;padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                  <span style="font-weight:700;font-size:13px" id="dedicated-cohort-title">Selection Rates &amp; Adverse Impact</span>
+                  <span style="font-size:11px;color:var(--muted)">Reference Benchmark: <b id="dedicated-ref-group" class="cyan">—</b></span>
+                </div>
+                <div id="dedicated-bars-container" style="display:flex;flex-direction:column;gap:10px"></div>
+              </div>
+              <div style="padding:14px;border-radius:9px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.25)">
+                <div class="eyebrow" style="color:var(--amber);margin-bottom:6px">⚖️ EEOC Legal Risk &amp; Bias Mitigation Guidance</div>
+                <ul id="dedicated-recs-list" style="margin:0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.7"></ul>
+              </div>
+            </div>
+
+            <!-- Detailed Subgroup Audit Table -->
+            <div class="table-wrap" style="margin-top:14px">
+              <table class="metric-table" style="font-size:12px">
+                <thead>
+                  <tr>
+                    <th>Demographic Subgroup</th>
+                    <th>Cohort Size (N)</th>
+                    <th>Flagged Departures</th>
+                    <th>Selection Rate</th>
+                    <th>TPR (Equal Opportunity)</th>
+                    <th>FPR (Predictive Equality)</th>
+                    <th>Adverse Impact Ratio (AIR)</th>
+                    <th>EEOC 80% Status</th>
+                  </tr>
+                </thead>
+                <tbody id="dedicated-table-body">
+                  <tr><td colspan="8" class="empty">Evaluating demographic cohorts...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
 
           <article class="card" style="margin-top:16px">
             <h3>PorusXS vs AlexzanderXS</h3>
@@ -692,15 +823,339 @@
       toast("Reset to optimal empirical cutoff (" + (opt * 100).toFixed(1) + "%)", "info");
     }
 
+    state.selectedFairnessCohortIdx = 0;
+
+    function renderFairnessView(selectedCohortIdx) {
+      if (selectedCohortIdx !== undefined) {
+        state.selectedFairnessCohortIdx = selectedCohortIdx;
+      }
+      const activeCandidate = state.selectedAnalysisModel
+        ? (state.modelComparison || []).find(m => m.model_name === state.selectedAnalysisModel) || state.metrics
+        : state.metrics;
+      const audit = (activeCandidate && activeCandidate.fairness_audit) || (state.metrics && state.metrics.fairness_audit);
+      const badge = q("#roc-auc-badge");
+
+      if (!audit || !audit.attributes || !audit.attributes.length) {
+        if (badge) {
+          badge.textContent = "Fairness: N/A";
+          badge.className = "pill";
+        }
+        setText("#fairness-overall-badge", "Awaiting Demographic Audit");
+        setText("#fairness-score-val", "—");
+        q("#fairness-cohort-pills").innerHTML = "";
+        q("#fairness-bars-container").innerHTML = "<div class='empty'>No demographic fields (Gender, Age, Department) detected in current evaluation.</div>";
+        q("#fairness-table-body").innerHTML = "<tr><td colspan='8' class='empty'>No demographic fairness audit available.</td></tr>";
+        q("#fairness-recs-list").innerHTML = "<li>Upload or train with demographic attributes to inspect EEOC Four-Fifths compliance.</li>";
+        return;
+      }
+
+      if (badge) {
+        badge.textContent = `Fairness: ${audit.fairness_score}/100`;
+        badge.className = audit.overall_compliant ? "pill live green" : "pill live amber";
+      }
+
+      const overallBadge = q("#fairness-overall-badge");
+      if (overallBadge) {
+        if (audit.overall_compliant) {
+          overallBadge.innerHTML = `<span style="color:var(--green)">✓ COMPLIANT (80% Rule Satisfied)</span>`;
+        } else if (audit.fairness_score >= 70) {
+          overallBadge.innerHTML = `<span style="color:var(--amber)">⚠ WARNING (Marginal Disparities)</span>`;
+        } else {
+          overallBadge.innerHTML = `<span style="color:var(--rose)">✕ ADVERSE IMPACT DETECTED</span>`;
+        }
+      }
+
+      const scoreVal = q("#fairness-score-val");
+      if (scoreVal) {
+        scoreVal.textContent = `${audit.fairness_score} / 100`;
+        scoreVal.style.color = audit.fairness_score >= 80 ? "var(--green)" : (audit.fairness_score >= 65 ? "var(--amber)" : "var(--rose)");
+      }
+
+      // Render cohort selector buttons
+      const pillsContainer = q("#fairness-cohort-pills");
+      pillsContainer.innerHTML = "";
+      const currentIdx = Math.min(state.selectedFairnessCohortIdx || 0, audit.attributes.length - 1);
+      state.selectedFairnessCohortIdx = currentIdx;
+
+      audit.attributes.forEach((attr, idx) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = idx === currentIdx ? "curve-tab-btn active" : "curve-tab-btn";
+        const dotColor = attr.four_fifths_passed ? "var(--green)" : "var(--rose)";
+        btn.innerHTML = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};margin-right:6px"></span>${attr.attribute_name}`;
+        btn.onclick = () => renderFairnessView(idx);
+        pillsContainer.appendChild(btn);
+      });
+
+      const activeAttr = audit.attributes[currentIdx];
+      if (!activeAttr) return;
+
+      setText("#fairness-cohort-title", `Selection Rates by ${activeAttr.attribute_name}`);
+      setText("#fairness-ref-group", activeAttr.reference_group);
+
+      // Render Bar Chart
+      const barsContainer = q("#fairness-bars-container");
+      barsContainer.innerHTML = "";
+
+      const maxSr = Math.max(...activeAttr.subgroups.map(s => s.selection_rate), 0.001);
+
+      activeAttr.subgroups.forEach(sg => {
+        const barWrap = document.createElement("div");
+        barWrap.style.display = "flex";
+        barWrap.style.flexDirection = "column";
+        barWrap.style.gap = "3px";
+
+        const isRef = sg.group === activeAttr.reference_group;
+        const widthPct = Math.min(100, Math.max(2, (sg.selection_rate / Math.max(maxSr, 0.05)) * 100));
+        const color = isRef ? "#22d3ee" : (sg.four_fifths_passed ? "#34d399" : (sg.disparate_impact_ratio >= 0.7 ? "#fbbf24" : "#f43f5e"));
+        const statusBadge = sg.four_fifths_passed
+          ? `<span style="color:var(--green);font-size:10px;font-weight:700">PASS</span>`
+          : `<span style="color:var(--rose);font-size:10px;font-weight:700">VIOLATION</span>`;
+
+        barWrap.innerHTML = `
+          <div style="display:flex;justify-content:space-between;font-size:11px">
+            <span><b>${sg.group}</b> ${isRef ? '<span style="color:var(--cyan);font-size:10px">(Reference)</span>' : ''}</span>
+            <span>Flagged: <b>${(sg.selection_rate * 100).toFixed(1)}%</b> (${sg.selection_count}/${sg.sample_count}) · AIR: <b>${(sg.disparate_impact_ratio * 100).toFixed(1)}%</b> · ${statusBadge}</span>
+          </div>
+          <div style="position:relative;height:12px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+            <div style="width:${widthPct}%;height:100%;background:${color};border-radius:4px;transition:width .3s"></div>
+          </div>
+        `;
+        barsContainer.appendChild(barWrap);
+      });
+
+      // Render Subgroups Table
+      const tableBody = q("#fairness-table-body");
+      tableBody.innerHTML = "";
+      activeAttr.subgroups.forEach(sg => {
+        const tr = document.createElement("tr");
+        const statusPill = sg.four_fifths_passed
+          ? `<span class="pill" style="color:var(--green);border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.08)">Pass</span>`
+          : `<span class="pill" style="color:var(--rose);border-color:rgba(244,63,94,.3);background:rgba(244,63,94,.08)">Violation</span>`;
+
+        tr.innerHTML = `
+          <td><b>${sg.group}</b></td>
+          <td>${sg.sample_count.toLocaleString()}</td>
+          <td>${sg.selection_count.toLocaleString()}</td>
+          <td><b>${(sg.selection_rate * 100).toFixed(1)}%</b></td>
+          <td style="color:var(--green)">${(sg.tpr * 100).toFixed(1)}%</td>
+          <td style="color:${sg.fpr > 0.05 ? 'var(--rose)' : 'inherit'}">${(sg.fpr * 100).toFixed(1)}%</td>
+          <td><b>${(sg.disparate_impact_ratio * 100).toFixed(1)}%</b></td>
+          <td>${statusPill}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+
+      // Render Recommendations
+      const recsList = q("#fairness-recs-list");
+      recsList.innerHTML = "";
+      (audit.recommendations || []).forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = r;
+        recsList.appendChild(li);
+      });
+
+      renderDedicatedFairnessAudit(selectedCohortIdx);
+    }
+
+    function renderDedicatedFairnessAudit(selectedCohortIdx) {
+      if (selectedCohortIdx !== undefined) {
+        state.selectedFairnessCohortIdx = selectedCohortIdx;
+      }
+      const activeCandidate = state.selectedAnalysisModel
+        ? (state.modelComparison || []).find(m => m.model_name === state.selectedAnalysisModel) || state.metrics
+        : state.metrics;
+      const audit = (activeCandidate && activeCandidate.fairness_audit) || (state.metrics && state.metrics.fairness_audit);
+
+      const eeocBadge = q("#eeoc-interactive-badge");
+      const kpiScore = q("#fairness-kpi-score");
+
+      if (!audit || !audit.attributes || !audit.attributes.length) {
+        if (eeocBadge) {
+          eeocBadge.textContent = "EEOC: Demographic Audit Unavailable";
+          eeocBadge.className = "pill";
+        }
+        if (kpiScore) kpiScore.textContent = "Fairness: — / 100";
+        setText("#kpi-fairness-air", "—");
+        setText("#kpi-fairness-dp", "—");
+        setText("#kpi-fairness-tpr", "—");
+        setText("#kpi-fairness-fpr", "—");
+        const tabsWrap = q("#dedicated-cohort-tabs");
+        if (tabsWrap) tabsWrap.innerHTML = "";
+        const barsWrap = q("#dedicated-bars-container");
+        if (barsWrap) barsWrap.innerHTML = "<div class='empty'>No demographic attributes (Gender, Age, Department) detected in current dataset.</div>";
+        const tableBody = q("#dedicated-table-body");
+        if (tableBody) tableBody.innerHTML = "<tr><td colspan='8' class='empty'>Train with demographic fields to audit EEOC compliance.</td></tr>";
+        const recsList = q("#dedicated-recs-list");
+        if (recsList) recsList.innerHTML = "<li>No demographic data available. Upload an enterprise workforce CSV containing Gender or Age to audit bias.</li>";
+        return;
+      }
+
+      // Update interactive compliance badge
+      if (eeocBadge) {
+        if (audit.overall_compliant) {
+          eeocBadge.innerHTML = "✓ EEOC 80% Rule Compliant";
+          eeocBadge.style.background = "rgba(16,185,129,.15)";
+          eeocBadge.style.color = "#86efac";
+          eeocBadge.style.borderColor = "rgba(52,211,153,.4)";
+        } else if (audit.fairness_score >= 70) {
+          eeocBadge.innerHTML = "⚠ Marginal Disparity Detected";
+          eeocBadge.style.background = "rgba(234,179,8,.15)";
+          eeocBadge.style.color = "#fde047";
+          eeocBadge.style.borderColor = "rgba(234,179,8,.4)";
+        } else {
+          eeocBadge.innerHTML = "✕ Adverse Impact Disparity";
+          eeocBadge.style.background = "rgba(239,68,68,.15)";
+          eeocBadge.style.color = "#fca5a5";
+          eeocBadge.style.borderColor = "rgba(239,68,68,.4)";
+        }
+      }
+
+      if (kpiScore) {
+        kpiScore.textContent = `Fairness: ${audit.fairness_score} / 100`;
+        kpiScore.style.color = audit.fairness_score >= 80 ? "var(--green)" : (audit.fairness_score >= 65 ? "var(--amber)" : "var(--rose)");
+      }
+
+      // Headline Parity KPIs
+      setText("#kpi-fairness-air", ((audit.disparate_impact_ratio || 0) * 100).toFixed(1) + "%");
+      setText("#kpi-fairness-dp", ((audit.demographic_parity_diff || 0) * 100).toFixed(1) + "%");
+      setText("#kpi-fairness-tpr", ((audit.equal_opportunity_diff || 0) * 100).toFixed(1) + "%");
+      setText("#kpi-fairness-fpr", ((audit.predictive_equality_diff || 0) * 100).toFixed(1) + "%");
+
+      // Dynamic Cohort Tabs
+      const tabsWrap = q("#dedicated-cohort-tabs");
+      if (tabsWrap) {
+        tabsWrap.innerHTML = "";
+        const currentIdx = Math.min(state.selectedFairnessCohortIdx || 0, audit.attributes.length - 1);
+        state.selectedFairnessCohortIdx = currentIdx;
+
+        audit.attributes.forEach((attr, idx) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = idx === currentIdx ? "curve-tab-btn active" : "curve-tab-btn";
+          const dotColor = attr.four_fifths_passed ? "var(--green)" : "var(--rose)";
+          btn.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};margin-right:7px"></span>${attr.attribute_name} (${(attr.disparate_impact_ratio * 100).toFixed(0)}% AIR)`;
+          btn.onclick = () => {
+            renderDedicatedFairnessAudit(idx);
+            renderFairnessView(idx);
+          };
+          tabsWrap.appendChild(btn);
+        });
+
+        const activeAttr = audit.attributes[currentIdx];
+        if (activeAttr) {
+          setText("#dedicated-cohort-title", `Selection Rates by ${activeAttr.attribute_name}`);
+          setText("#dedicated-ref-group", activeAttr.reference_group);
+
+          // Visual Bar Chart
+          const barsWrap = q("#dedicated-bars-container");
+          if (barsWrap) {
+            barsWrap.innerHTML = "";
+            const maxSr = Math.max(...activeAttr.subgroups.map(s => s.selection_rate), 0.001);
+
+            activeAttr.subgroups.forEach(sg => {
+              const barWrap = document.createElement("div");
+              barWrap.style.display = "flex";
+              barWrap.style.flexDirection = "column";
+              barWrap.style.gap = "4px";
+
+              const isRef = sg.group === activeAttr.reference_group;
+              const widthPct = Math.min(100, Math.max(3, (sg.selection_rate / Math.max(maxSr, 0.05)) * 100));
+              const color = isRef ? "#22d3ee" : (sg.four_fifths_passed ? "#34d399" : (sg.disparate_impact_ratio >= 0.7 ? "#fbbf24" : "#f43f5e"));
+              const statusBadge = sg.four_fifths_passed
+                ? `<span style="color:var(--green);font-size:10px;font-weight:700">PASS (≥80%)</span>`
+                : `<span style="color:var(--rose);font-size:10px;font-weight:700">VIOLATION (&lt;80%)</span>`;
+
+              barWrap.innerHTML = `
+                <div style="display:flex;justify-content:space-between;font-size:12px">
+                  <span><b>${sg.group}</b> ${isRef ? '<span style="color:var(--cyan);font-size:11px">(Reference Cohort)</span>' : ''}</span>
+                  <span>Flagged: <b>${(sg.selection_rate * 100).toFixed(1)}%</b> (${sg.selection_count}/${sg.sample_count}) · AIR: <b>${(sg.disparate_impact_ratio * 100).toFixed(1)}%</b> · ${statusBadge}</span>
+                </div>
+                <div style="position:relative;height:14px;background:rgba(255,255,255,0.06);border-radius:5px;overflow:hidden">
+                  <div style="width:${widthPct}%;height:100%;background:${color};border-radius:5px;transition:width .35s"></div>
+                </div>
+              `;
+              barsWrap.appendChild(barWrap);
+            });
+          }
+
+          // Subgroup Parity Table
+          const tableBody = q("#dedicated-table-body");
+          if (tableBody) {
+            tableBody.innerHTML = "";
+            activeAttr.subgroups.forEach(sg => {
+              const tr = document.createElement("tr");
+              const statusPill = sg.four_fifths_passed
+                ? `<span class="pill" style="color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1)">✓ 80% Pass</span>`
+                : `<span class="pill" style="color:var(--rose);border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.1)">✕ Adverse Impact</span>`;
+
+              tr.innerHTML = `
+                <td><b>${sg.group}</b></td>
+                <td>${sg.sample_count.toLocaleString()}</td>
+                <td>${sg.selection_count.toLocaleString()}</td>
+                <td><b>${(sg.selection_rate * 100).toFixed(1)}%</b></td>
+                <td style="color:var(--green)">${(sg.tpr * 100).toFixed(1)}%</td>
+                <td style="color:${sg.fpr > 0.05 ? 'var(--rose)' : 'inherit'}">${(sg.fpr * 100).toFixed(1)}%</td>
+                <td><b>${(sg.disparate_impact_ratio * 100).toFixed(1)}%</b></td>
+                <td>${statusPill}</td>
+              `;
+              tableBody.appendChild(tr);
+            });
+          }
+        }
+      }
+
+      // Recommendations
+      const recsList = q("#dedicated-recs-list");
+      if (recsList) {
+        recsList.innerHTML = "";
+        (audit.recommendations || []).forEach(r => {
+          const li = document.createElement("li");
+          li.textContent = r;
+          recsList.appendChild(li);
+        });
+      }
+    }
+
+    function cycleComplianceCohort() {
+      const activeCandidate = state.selectedAnalysisModel
+        ? (state.modelComparison || []).find(m => m.model_name === state.selectedAnalysisModel) || state.metrics
+        : state.metrics;
+      const audit = (activeCandidate && activeCandidate.fairness_audit) || (state.metrics && state.metrics.fairness_audit);
+      if (!audit || !audit.attributes || !audit.attributes.length) return;
+      const nextIdx = ((state.selectedFairnessCohortIdx || 0) + 1) % audit.attributes.length;
+      renderDedicatedFairnessAudit(nextIdx);
+      renderFairnessView(nextIdx);
+      toast(`Switched demographic audit view to ${audit.attributes[nextIdx].attribute_name}`, "info");
+    }
+
     function setCurveTab(tab) {
       state.activeCurveTab = tab;
-      ["roc", "pr", "cal"].forEach(t => {
+      ["roc", "pr", "cal", "fairness"].forEach(t => {
         const b = q("#tab-curve-" + t);
         if (b) b.className = t === tab ? "curve-tab-btn active" : "curve-tab-btn";
       });
 
       const title = q("#observatory-chart-title");
       const sub = q("#observatory-chart-sub");
+      const chartWrap = q("#obs-chart-container");
+      const legend = q("#obs-legend");
+      const fairnessWrap = q("#fairness-view-container");
+
+      if (tab === "fairness") {
+        if (title) title.textContent = "Research Observatory: Algorithmic Fairness & EEOC Audit";
+        if (sub) sub.textContent = "Subgroup parity and Four-Fifths adverse impact compliance across protected cohorts";
+        if (chartWrap) chartWrap.style.display = "none";
+        if (legend) legend.style.display = "none";
+        if (fairnessWrap) fairnessWrap.style.display = "block";
+        renderFairnessView();
+        return;
+      }
+
+      if (chartWrap) chartWrap.style.display = "block";
+      if (legend) legend.style.display = "flex";
+      if (fairnessWrap) fairnessWrap.style.display = "none";
+
       if (tab === "roc") {
         if (title) title.textContent = "Research Observatory: ROC Discrimination Curve";
         if (sub) sub.textContent = "Sensitivity vs False Alarm Rate across all operating thresholds";
@@ -1026,7 +1481,12 @@
       if (slider) slider.value = state.decisionThreshold;
       onThresholdSlider(state.decisionThreshold, metrics);
 
-      renderObservatoryChart();
+      if (state.activeCurveTab === "fairness") {
+        renderFairnessView();
+      } else {
+        renderObservatoryChart();
+      }
+      renderDedicatedFairnessAudit();
     }
 
     function selectAnalysisModel(modelName) {

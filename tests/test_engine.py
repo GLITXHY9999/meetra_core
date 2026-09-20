@@ -82,3 +82,29 @@ def test_engine_persists_and_reloads(tmp_path):
     reloaded = KaizenEngine.load(path)
     payload = {feature["name"]: feature["default"] for feature in engine.get_feature_schema()}
     assert reloaded.predict_detailed(payload)["risk_score"] == pytest.approx(engine.predict_detailed(payload)["risk_score"])
+
+
+def test_audit_fairness_four_fifths_rule_and_adea():
+    rng = np.random.default_rng(42)
+    n = 200
+    df = pd.DataFrame({
+        "Gender": ["Female"] * 100 + ["Male"] * 100,
+        "Age": np.concatenate([rng.integers(20, 35, 100), rng.integers(45, 65, 100)]),
+        "Department": ["Sales"] * 100 + ["Engineering"] * 100,
+    })
+    y_true = np.concatenate([np.ones(15), np.zeros(85), np.ones(15), np.zeros(85)])
+    probs = np.concatenate([np.linspace(0.1, 0.9, 100), np.linspace(0.1, 0.9, 100)])
+
+    audit = KaizenEngine._audit_fairness(df, y_true, probs, threshold=0.5)
+    assert audit is not None
+    assert "status" in audit
+    assert "overall_compliant" in audit
+    assert 0.0 <= audit["fairness_score"] <= 100.0
+    assert len(audit["attributes"]) >= 2
+
+    gender_report = next(a for a in audit["attributes"] if a["attribute_name"] == "Gender")
+    assert gender_report["four_fifths_passed"] is True
+    assert gender_report["disparate_impact_ratio"] >= 0.80
+
+    age_report = next(a for a in audit["attributes"] if "ADEA" in a["attribute_name"])
+    assert len(age_report["subgroups"]) == 2

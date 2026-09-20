@@ -85,6 +85,45 @@ class ThresholdMetricPoint(APIModel):
     net_roi: float = 0.0
 
 
+class SubgroupFairnessMetric(APIModel):
+    group: str
+    sample_count: int
+    selection_count: int
+    selection_rate: float
+    tpr: float
+    fpr: float
+    disparate_impact_ratio: float
+    four_fifths_passed: bool
+    status: str = "PASS"  # PASS, WARNING, VIOLATION
+
+
+class AttributeFairnessReport(APIModel):
+    attribute_name: str
+    subgroups: list[SubgroupFairnessMetric]
+    reference_group: str
+    disparate_impact_ratio: float
+    four_fifths_passed: bool
+    statistical_parity_diff: float
+    demographic_parity_diff: float = 0.0
+    tpr_disparity: float
+    equal_opportunity_diff: float = 0.0
+    fpr_disparity: float
+    predictive_equality_diff: float = 0.0
+    status: str = "PASS"
+
+
+class FairnessAuditReport(APIModel):
+    overall_compliant: bool
+    fairness_score: float  # 0 to 100
+    status: str = "PASS"  # PASS, WARNING, VIOLATION
+    disparate_impact_ratio: float = 1.0
+    demographic_parity_diff: float = 0.0
+    equal_opportunity_diff: float = 0.0
+    predictive_equality_diff: float = 0.0
+    attributes: list[AttributeFairnessReport] = []
+    recommendations: list[str] = []
+
+
 class ConfusionMatrix(APIModel):
     tn: int
     fp: int
@@ -116,6 +155,7 @@ class ClassificationMetrics(APIModel):
     brier_decomposition: BrierDecomposition | None = None
     baseline_prevalence: float = 0.0
     hardware_device: str = "cpu"
+    fairness_audit: FairnessAuditReport | None = None
 
 
 class CandidateMetrics(ClassificationMetrics):
