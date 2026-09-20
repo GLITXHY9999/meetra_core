@@ -180,6 +180,7 @@ def _high_risk_employees(engine, raw_df: pd.DataFrame) -> list[dict[str, Any]]:
                         "department": _display_value(row, "Department"),
                         "job_role": _display_value(row, "JobRole"),
                         "profile": profile,
+                        "team_contagion": details.get("team_contagion"),
                     })
                 )
             except (TypeError, ValueError) as exc:
@@ -339,6 +340,8 @@ def predict_live(
         model_name=detail["model_name"],
         model_version=service.engine.version,
         decision_threshold=detail["decision_threshold"],
+        shap_base_value=detail.get("shap_base_value"),
+        team_contagion=detail.get("team_contagion"),
     )
 
 
@@ -382,8 +385,10 @@ async def batch_predict(
             if col in row.index and pd.notna(row[col])
         }
         drivers = []
+        contagion = None
         try:
             drivers = engine._local_drivers(engine._aligned_profile(profile), p_val)
+            contagion = engine._detect_team_contagion(profile, p_val)
         except Exception:
             pass
 
@@ -396,6 +401,7 @@ async def batch_predict(
             "monthly_income": row.get("MonthlyIncome", "N/A"),
             "drivers": drivers[:4],
             "profile": profile,
+            "team_contagion": contagion,
         }))
 
     return _sanitize_for_json({

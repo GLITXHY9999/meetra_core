@@ -1,7 +1,7 @@
 """API contracts for Kaizen's evaluated attrition-classification workflow."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +14,17 @@ class Driver(APIModel):
     feature: str
     impact: float
     method: str
+    shap_value: float | None = None
+    direction: str = "risk_increasing"  # risk_increasing, protective, or baseline
+
+
+class TeamContagionReport(APIModel):
+    contagion_risk_level: str  # LOW, MODERATE, ELEVATED, CRITICAL
+    team_density_pct: float
+    contagion_multiplier: float
+    contagion_adjusted_risk: float
+    contagion_triggers: list[str] = []
+    containment_strategy: str
 
 
 class Prescription(APIModel):
@@ -37,6 +48,8 @@ class PredictResponse(APIModel):
     model_name: str
     model_version: str
     decision_threshold: float
+    shap_base_value: float | None = None
+    team_contagion: TeamContagionReport | None = None
 
 
 class RocPoint(APIModel):
@@ -205,6 +218,7 @@ class HighRiskEmployee(APIModel):
     department: str
     job_role: str
     profile: dict[str, Any] = {}
+    team_contagion: TeamContagionReport | None = None
 
 
 class TrainResult(APIModel):

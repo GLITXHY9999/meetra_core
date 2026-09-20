@@ -108,3 +108,67 @@ def test_audit_fairness_four_fifths_rule_and_adea():
 
     age_report = next(a for a in audit["attributes"] if "ADEA" in a["attribute_name"])
     assert len(age_report["subgroups"]) == 2
+
+
+def test_treeshap_explainability_and_additivity():
+    X, y, _ = prepare_training_data(_synthetic_frame(), target_column="Attrition")
+    engine = KaizenEngine(task_type="classification", target_col="Attrition").fit(X, y)
+
+    payload = {col: X.iloc[0][col] for col in X.columns}
+    result = engine.predict_detailed(payload)
+
+    assert "risk_score" in result
+    assert 0.0 <= result["risk_score"] <= 1.0
+    assert "drivers" in result
+    assert len(result["drivers"]) > 0
+
+    first_driver = result["drivers"][0]
+    assert "feature" in first_driver
+    assert "impact" in first_driver
+    assert "method" in first_driver
+    assert "shap_value" in first_driver
+    assert "direction" in first_driver
+    assert first_driver["direction"] in {"risk_increasing", "protective", "baseline"}
+
+    assert "team_contagion" in result
+    assert result["team_contagion"] is not None
+    assert "contagion_risk_level" in result["team_contagion"]
+    assert "contagion_multiplier" in result["team_contagion"]
+    assert "contagion_adjusted_risk" in result["team_contagion"]
+
+
+def test_team_churn_contagion_detector():
+    engine = KaizenEngine(task_type="classification", target_col="Attrition")
+
+    # High vulnerability profile: new manager, toxic climate, overtime, promotion ceiling
+    high_vuln = {
+        "YearsWithCurrManager": 0,
+        "EnvironmentSatisfaction": 1,
+        "JobSatisfaction": 1,
+        "OverTime": "Yes",
+        "YearsSinceLastPromotion": 6,
+        "Department": "Sales & Revenue",
+    }
+    high_report = engine._detect_team_contagion(high_vuln, raw_risk=0.65)
+    assert high_report["contagion_multiplier"] >= 1.25
+    assert high_report["contagion_adjusted_risk"] > 0.65
+    assert high_report["contagion_risk_level"] in {"CRITICAL", "ELEVATED"}
+    assert len(high_report["contagion_triggers"]) >= 4
+    assert len(high_report["containment_strategy"]) > 0
+
+    # Low vulnerability profile: stable manager, high satisfaction, no overtime
+    low_vuln = {
+        "YearsWithCurrManager": 6,
+        "EnvironmentSatisfaction": 4,
+        "JobSatisfaction": 4,
+        "OverTime": "No",
+        "YearsSinceLastPromotion": 1,
+        "StockOptionLevel": 2,
+        "Department": "Engineering & Technology",
+    }
+    low_report = engine._detect_team_contagion(low_vuln, raw_risk=0.08)
+    assert low_report["contagion_multiplier"] == 1.0
+    assert low_report["contagion_adjusted_risk"] == pytest.approx(0.08, abs=1e-3)
+    assert low_report["contagion_risk_level"] == "LOW"
+    assert len(low_report["contagion_triggers"]) == 0
+

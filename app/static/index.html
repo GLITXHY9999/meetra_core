@@ -638,10 +638,29 @@
                 <span class="risk-tag" id="risk-status">Awaiting profile</span>
                 <p id="prediction-model" style="margin-top:10px"></p>
               </article>
-              <div class="grid split-even">
                 <article class="card" id="financial-card">
                   <h3>Estimated capital impact</h3><p>Planning estimate using 1.5× annual salary replacement cost.</p>
                   <div class="results-list"><div class="result-row"><div class="result-row-top"><span>Replacement cost</span><b class="rose" id="turnover-cost">—</b></div></div><div class="result-row"><div class="result-row-top"><span>Retention support cost</span><b id="retention-cost">—</b></div></div><div class="result-row"><div class="result-row-top"><span>Potential capital retained</span><b class="green" id="savings-cost">—</b></div></div></div>
+                </article>
+                <article class="card hidden" id="contagion-card">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <h3 style="margin:0;">Team Churn Contagion</h3>
+                    <span class="pill" id="contagion-risk-badge" style="font-weight:700;">LOW</span>
+                  </div>
+                  <p style="margin-top:4px; font-size:12px; color:var(--muted);">Sociometric cascade hazard modeling managerial fragility, hostile climate, and peer cues (Felps et al., 2008).</p>
+                  <div class="results-list">
+                    <div class="result-row"><div class="result-row-top"><span>Contagion Multiplier</span><b id="contagion-multiplier">1.00×</b></div></div>
+                    <div class="result-row"><div class="result-row-top"><span>Contagion-Adjusted Risk</span><b class="rose" id="contagion-adjusted-risk">—</b></div></div>
+                    <div class="result-row"><div class="result-row-top"><span>Est. Localized Flight Density</span><b id="contagion-density">—</b></div></div>
+                    <div class="result-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
+                      <span style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Active Contagion Triggers</span>
+                      <div id="contagion-triggers-list" style="display:flex; flex-direction:column; gap:4px; width:100%;"></div>
+                    </div>
+                    <div class="result-row" style="flex-direction:column; align-items:flex-start; gap:4px; background:rgba(230,105,82,0.06); padding:8px 10px; border-radius:6px; border-left:3px solid var(--rose);">
+                      <span style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--rose); font-weight:700;">HR Containment Protocol</span>
+                      <p id="contagion-containment-text" style="margin:0; font-size:12px; line-height:1.4; color:var(--text);"></p>
+                    </div>
+                  </div>
                 </article>
                 <article class="card">
                   <h3>How to use the score</h3>
@@ -1740,7 +1759,11 @@
         row.className = "result-row"; top.className = "result-row-top"; feature.textContent = driver.feature; 
         impact.textContent = (driver.impact > 0 ? "+" : "") + Number(driver.impact).toFixed(1) + " pts"; 
         if (driver.impact <= 0) impact.style.color = "var(--green)";
-        description.textContent = driver.method || "model signal"; top.append(feature, impact); row.append(top, description); drivers.appendChild(row);
+        let desc = driver.method || "model signal";
+        if (driver.shap_value !== undefined && driver.shap_value !== null) {
+          desc += " • TreeSHAP: " + (driver.shap_value > 0 ? "+" : "") + Number(driver.shap_value).toFixed(4);
+        }
+        description.textContent = desc; top.append(feature, impact); row.append(top, description); drivers.appendChild(row);
       });
       if (!prescriptionItems.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No follow-up prompt is suggested because no material risk-increasing signal was found."; prescriptions.appendChild(empty); }
       prescriptionItems.forEach((item) => {
@@ -1749,6 +1772,48 @@
       });
       if (data.financials) { q("#financial-card").classList.remove("hidden"); setText("#turnover-cost", money(data.financials.turnover_replacement_cost)); setText("#retention-cost", money(data.financials.retention_intervention_cost)); setText("#savings-cost", money(data.financials.net_capital_saved)); }
       else { q("#financial-card").classList.add("hidden"); }
+
+      if (data.team_contagion) {
+        const tc = data.team_contagion;
+        q("#contagion-card").classList.remove("hidden");
+        const badge = q("#contagion-risk-badge");
+        badge.textContent = tc.contagion_risk_level + " CONTAGION";
+        if (tc.contagion_risk_level === "CRITICAL") {
+          badge.style.background = "rgba(230,105,82,0.18)"; badge.style.color = "var(--rose)"; badge.style.borderColor = "var(--rose)";
+        } else if (tc.contagion_risk_level === "ELEVATED") {
+          badge.style.background = "rgba(235,160,50,0.18)"; badge.style.color = "#f59e0b"; badge.style.borderColor = "#f59e0b";
+        } else if (tc.contagion_risk_level === "MODERATE") {
+          badge.style.background = "rgba(100,150,250,0.18)"; badge.style.color = "#60a5fa"; badge.style.borderColor = "#60a5fa";
+        } else {
+          badge.style.background = "rgba(46,196,182,0.18)"; badge.style.color = "var(--green)"; badge.style.borderColor = "var(--green)";
+        }
+        setText("#contagion-multiplier", Number(tc.contagion_multiplier).toFixed(2) + "×");
+        setText("#contagion-adjusted-risk", (Number(tc.contagion_adjusted_risk) * 100).toFixed(1) + "%");
+        setText("#contagion-density", Number(tc.team_density_pct).toFixed(1) + "%");
+        
+        const trigList = q("#contagion-triggers-list");
+        trigList.replaceChildren();
+        if (tc.contagion_triggers && tc.contagion_triggers.length > 0) {
+          tc.contagion_triggers.forEach(t => {
+            const item = document.createElement("div");
+            item.style.fontSize = "11px";
+            item.style.padding = "2px 6px";
+            item.style.borderRadius = "4px";
+            item.style.background = "rgba(255,255,255,0.04)";
+            item.style.color = "var(--text)";
+            item.textContent = "⚠ " + t;
+            trigList.appendChild(item);
+          });
+        } else {
+          const item = document.createElement("div");
+          item.style.fontSize = "11px"; item.style.color = "var(--muted)";
+          item.textContent = "No localized contagion triggers detected (relational network stable).";
+          trigList.appendChild(item);
+        }
+        setText("#contagion-containment-text", tc.containment_strategy || "Standard quarterly review.");
+      } else {
+        q("#contagion-card").classList.add("hidden");
+      }
     }
 
     async function calculateSimulation() {

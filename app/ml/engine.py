@@ -1021,14 +1021,171 @@ class KaizenEngine:
                 row[col] = str(value)
         return pd.DataFrame([row], columns=expected)
 
+    def _detect_team_contagion(
+        self,
+        profile_data: pd.DataFrame | dict[str, Any],
+        raw_risk: float,
+        dept_risk_density: float | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate organizational turnover contagion dynamics (Felps et al., 2008).
+
+        Turnover transmits contagiously through managerial instability, hostile micro-climates,
+        chronic burnout, and career progression ceilings.
+        """
+        if isinstance(profile_data, pd.DataFrame):
+            row_dict = profile_data.iloc[0].to_dict() if len(profile_data) > 0 else {}
+        elif isinstance(profile_data, dict):
+            row_dict = profile_data
+        else:
+            row_dict = {}
+
+        triggers: list[str] = []
+        weights: list[float] = []
+
+        # 1. Managerial Relational Fragility
+        curr_mgr = row_dict.get("YearsWithCurrManager")
+        if curr_mgr is not None:
+            try:
+                val = float(curr_mgr)
+                if val <= 1.0:
+                    triggers.append("Managerial relationship fragility (tenure <= 1 yr; unanchored psychological contract)")
+                    weights.append(0.12 if val == 0 else 0.09)
+            except (ValueError, TypeError):
+                pass
+
+        # 2. Adverse Organizational Culture & Micro-Climate
+        env_sat = row_dict.get("EnvironmentSatisfaction")
+        if env_sat is not None:
+            try:
+                val = float(env_sat)
+                if val <= 2.0:
+                    triggers.append("Adverse department climate (EnvironmentSatisfaction <= 2/4)")
+                    weights.append(0.10 if val == 1.0 else 0.06)
+            except (ValueError, TypeError):
+                pass
+
+        # 3. Affective Disengagement
+        job_sat = row_dict.get("JobSatisfaction")
+        if job_sat is not None:
+            try:
+                val = float(job_sat)
+                if val <= 2.0:
+                    triggers.append("Affective job disengagement (JobSatisfaction <= 2/4)")
+                    weights.append(0.08)
+            except (ValueError, TypeError):
+                pass
+
+        # 4. Work-Life Equilibrium Deficit
+        wlb = row_dict.get("WorkLifeBalance")
+        if wlb is not None:
+            try:
+                val = float(wlb)
+                if val <= 2.0:
+                    triggers.append("Work-life equilibrium deficit (WorkLifeBalance <= 2/4)")
+                    weights.append(0.06)
+            except (ValueError, TypeError):
+                pass
+
+        # 5. Chronic Overtime Burnout Contagion
+        ot_val = str(row_dict.get("OverTime", "")).strip().lower()
+        if ot_val in {"yes", "true", "1", "y"}:
+            triggers.append("Chronic overtime pressure (accelerated peer burnout hazard)")
+            weights.append(0.08)
+
+        # 6. Career Mobility / Promotion Stagnation
+        last_prom = row_dict.get("YearsSinceLastPromotion")
+        if last_prom is not None:
+            try:
+                val = float(last_prom)
+                if val >= 5.0:
+                    triggers.append("Career mobility ceiling (>= 5 years without promotion)")
+                    weights.append(0.05)
+            except (ValueError, TypeError):
+                pass
+
+        # 7. Unvested / Zero Equity Handcuffs
+        stock = row_dict.get("StockOptionLevel")
+        if stock is not None:
+            try:
+                val = float(stock)
+                if val == 0.0:
+                    triggers.append("Zero equity lock-in (uninhibited external mobility barrier)")
+                    weights.append(0.04)
+            except (ValueError, TypeError):
+                pass
+
+        # Contagion multiplier bounded between 1.00 and 1.45
+        contagion_multiplier = round(min(1.45, 1.0 + sum(weights)), 2)
+
+        # Non-linear contagion-adjusted hazard transmission:
+        # P_contagion = 1.0 - (1.0 - raw_risk)^multiplier
+        raw_risk_clamped = max(0.0, min(1.0, float(raw_risk)))
+        if contagion_multiplier > 1.0:
+            adjusted_risk = 1.0 - np.power(max(0.0, 1.0 - raw_risk_clamped), contagion_multiplier)
+        else:
+            adjusted_risk = raw_risk_clamped
+        adjusted_risk = round(float(min(0.999, max(0.001, adjusted_risk))), 4)
+
+        # Localized Team Flight Density estimate
+        if dept_risk_density is not None:
+            team_density_pct = round(float(dept_risk_density) * 100, 1)
+        else:
+            dept_name = str(row_dict.get("Department", "")).strip()
+            if "Sales" in dept_name:
+                base_density = 22.0
+            elif "Human Resources" in dept_name:
+                base_density = 19.5
+            elif "Engineering" in dept_name or "Technology" in dept_name:
+                base_density = 15.0
+            elif "Research" in dept_name:
+                base_density = 14.5
+            else:
+                base_density = 16.0
+            team_density_pct = round(min(65.0, base_density + len(triggers) * 4.5), 1)
+
+        # Categorize Contagion Risk Level
+        if (adjusted_risk >= 0.70 and len(triggers) >= 2) or (raw_risk_clamped >= 0.65 and contagion_multiplier >= 1.25):
+            contagion_level = "CRITICAL"
+        elif adjusted_risk >= 0.45 or len(triggers) >= 2:
+            contagion_level = "ELEVATED"
+        elif adjusted_risk >= 0.25 or len(triggers) >= 1:
+            contagion_level = "MODERATE"
+        else:
+            contagion_level = "LOW"
+
+        # Targeted Corporate Containment Strategy
+        if any("Managerial" in t for t in triggers):
+            containment = "Deploy immediate skip-level 1-on-1 within 48h to evaluate managerial rapport and re-anchor psychological contract."
+        elif any("overtime" in t or "climate" in t for t in triggers):
+            containment = "Implement temporary overtime moratorium, rebalance workload, and conduct localized team culture pulse check."
+        elif any("ceiling" in t or "equity" in t for t in triggers):
+            containment = "Expedite promotion and title progression review; structure customized equity retention award."
+        elif adjusted_risk >= 0.50:
+            containment = "Activate executive sponsorship and structured career pathway review to preempt departmental departure cascade."
+        else:
+            containment = "Maintain standard quarterly engagement monitoring; reinforce project autonomy and peer recognition."
+
+        return {
+            "contagion_risk_level": contagion_level,
+            "team_density_pct": team_density_pct,
+            "contagion_multiplier": contagion_multiplier,
+            "contagion_adjusted_risk": adjusted_risk,
+            "contagion_triggers": triggers,
+            "containment_strategy": containment,
+        }
+
     def predict_detailed(self, input_dict: dict[str, Any]) -> dict[str, Any]:
         if self.model is None or self.active_model is None:
             raise RuntimeError("No model has been trained yet.")
         profile = self._aligned_profile(input_dict)
         risk_score = float(self.model.predict_proba(profile)[0, 1])
-        drivers = self._local_drivers(profile, risk_score)
+        drivers, shap_base_val = self._explain_profile(profile, risk_score)
         prescriptions = [_prescription_for(driver["raw_feature"], driver.get("impact", 0.0)) for driver in drivers]
         thresh = getattr(self, "decision_threshold", 0.5)
+
+        # Evaluate Team Churn Contagion dynamics
+        contagion = self._detect_team_contagion(input_dict, risk_score)
+
         return {
             "risk_score": risk_score,
             "drivers": [
@@ -1036,12 +1193,16 @@ class KaizenEngine:
                     "feature": d["feature"],
                     "impact": d["impact"],
                     "method": d["method"],
+                    "shap_value": d.get("shap_value"),
+                    "direction": d.get("direction", "risk_increasing"),
                 }
                 for d in drivers
             ],
             "prescriptions": prescriptions,
             "model_name": self.active_model,
             "decision_threshold": thresh,
+            "shap_base_value": shap_base_val,
+            "team_contagion": contagion,
         }
 
     def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
@@ -1063,17 +1224,83 @@ class KaizenEngine:
         aligned_df = aligned_df[expected]
         return self.model.predict_proba(aligned_df)[:, 1]
 
-    def _local_drivers(
+    def _explain_profile(
         self, profile: pd.DataFrame, current_risk: float
-    ) -> list[dict[str, Any]]:
-        """Identify individual feature contributions via counterfactual perturbation.
-
-        Always returns the most decisive features (risk-increasing drivers or protective
-        factors) so recommendations are rich and actionable.
-        """
+    ) -> tuple[list[dict[str, Any]], float | None]:
+        """Compute exact TreeSHAP game-theoretic attributions (with graceful permutation fallback)."""
         if self.model is None:
-            return []
+            return [], None
+
         drivers: list[dict[str, Any]] = []
+        shap_base_value: float | None = None
+
+        # 1. Native C++ TreeSHAP attribution for XGBoost estimators
+        try:
+            preprocessor = self.model.named_steps.get("preprocess")
+            estimator = self.model.named_steps.get("estimator")
+            if (
+                preprocessor is not None
+                and estimator is not None
+                and hasattr(estimator, "get_booster")
+            ):
+                import xgboost as xgb
+
+                X_trans = preprocessor.transform(profile)
+                booster = estimator.get_booster()
+                dmat = xgb.DMatrix(X_trans)
+                contribs = booster.predict(dmat, pred_contribs=True)
+                raw_shap = contribs[0, :-1]
+                shap_base_value = float(contribs[0, -1])
+
+                feature_names = preprocessor.get_feature_names_out()
+                fmap: dict[str, float] = {}
+                for feat_col, val in zip(feature_names, raw_shap):
+                    if feat_col.startswith("num__"):
+                        parent = feat_col[5:]
+                    elif feat_col.startswith("cat__"):
+                        cat_sub = feat_col[5:]
+                        parent = cat_sub
+                        for c in self.categorical_features:
+                            if cat_sub.startswith(f"{c}_"):
+                                parent = c
+                                break
+                    else:
+                        parent = feat_col
+                    fmap[parent] = fmap.get(parent, 0.0) + float(val)
+
+                total_logit = shap_base_value + sum(fmap.values())
+                current_p = 1.0 / (1.0 + np.exp(-np.clip(total_logit, -50.0, 50.0)))
+
+                for col in self.numeric_features + self.categorical_features:
+                    if col in fmap:
+                        phi = fmap[col]
+                        counter_logit = total_logit - phi
+                        counter_p = 1.0 / (1.0 + np.exp(-np.clip(counter_logit, -50.0, 50.0)))
+                        marginal_p_delta = (current_p - counter_p) * 100.0
+
+                        drivers.append(
+                            {
+                                "raw_feature": col,
+                                "feature": _prettify(col),
+                                "impact": float(round(marginal_p_delta, 1)),
+                                "shap_value": float(round(phi, 4)),
+                                "direction": "risk_increasing" if phi > 0 else "protective",
+                                "abs_impact": abs(phi),
+                                "is_risk_increasing": phi > 0,
+                                "method": "TreeSHAP (exact Shapley)",
+                            }
+                        )
+
+                drivers.sort(key=lambda d: d["abs_impact"], reverse=True)
+                positive_drivers = [d for d in drivers if d["shap_value"] > 0.0]
+                if current_risk >= 0.35 and positive_drivers:
+                    return positive_drivers[:5], round(shap_base_value, 4)
+                if drivers:
+                    return drivers[:5], round(shap_base_value, 4)
+        except Exception as exc:
+            logger.debug("TreeSHAP calculation fallback: %s", exc)
+
+        # 2. Counterfactual perturbation fallback (for non-tree or legacy models)
         for col in self.numeric_features + self.categorical_features:
             reference = self.reference_profile.get(col)
             if reference is None:
@@ -1090,38 +1317,43 @@ class KaizenEngine:
                     "raw_feature": col,
                     "feature": _prettify(col),
                     "impact": round(delta * 100, 1),
+                    "shap_value": None,
+                    "direction": "risk_increasing" if delta > 0 else "protective",
                     "abs_impact": abs(delta),
                     "is_risk_increasing": delta > 0,
                     "method": "risk driver" if delta > 0 else "protective signal",
                 }
             )
 
-        # Sort by magnitude of contribution
         drivers.sort(key=lambda d: d["abs_impact"], reverse=True)
-
-        # Prioritize features pushing risk up
         positive_drivers = [d for d in drivers if d["impact"] > 0.0]
         if positive_drivers:
-            return positive_drivers[:5]
-
-        # If employee is low-risk / near baseline, highlight top stabilizing factors
+            return positive_drivers[:5], shap_base_value
         if drivers:
-            return drivers[:5]
+            return drivers[:5], shap_base_value
 
-        # Fallback to key features so simulator is never blank
         fallback_cols = ["OverTime", "MonthlyIncome", "JobSatisfaction", "DistanceFromHome", "YearsAtCompany"]
         return [
             {
                 "raw_feature": col,
                 "feature": _prettify(col),
                 "impact": 0.0,
+                "shap_value": 0.0,
+                "direction": "baseline",
                 "abs_impact": 0.0,
                 "is_risk_increasing": False,
                 "method": "baseline alignment",
             }
             for col in fallback_cols
             if col in self.numeric_features + self.categorical_features
-        ]
+        ], shap_base_value
+
+    def _local_drivers(
+        self, profile: pd.DataFrame, current_risk: float
+    ) -> list[dict[str, Any]]:
+        """Identify individual feature contributions (maintaining list[dict] contract)."""
+        drivers, _ = self._explain_profile(profile, current_risk)
+        return drivers
 
     # ------------------------------------------------------------------ #
     # Persistence
