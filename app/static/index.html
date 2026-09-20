@@ -141,7 +141,15 @@
     .diff-val { font-size:20px; font-weight:800; display:block; margin-top:2px; }
     .diff-arrow { font-size:18px; color:var(--cyan); font-weight:800; }
     .diff-delta { padding:10px 16px; border-radius:8px; background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.4); flex:1.2; min-width:130px; }
-    .diff-delta-val { font-size:18px; font-weight:800; color:var(--green); display:block; margin-top:2px; }
+    /* Research Observatory & Curve Tabs */
+    .curve-tab-btn { padding:5px 12px; border-radius:7px; font-size:11px; font-weight:700; border:1px solid var(--line); color:var(--muted); background:transparent; cursor:pointer; transition:all .15s ease; }
+    .curve-tab-btn:hover { background:rgba(255,255,255,.04); color:var(--ink); }
+    .curve-tab-btn.active { background:linear-gradient(135deg, rgba(34,211,238,.2), rgba(96,165,250,.15)); border-color:var(--cyan); color:#e0f2fe; }
+    .obs-chart-wrap { position:relative; width:100%; margin-top:10px; }
+    .obs-chart { width:100%; height:auto; display:block; overflow:visible; cursor:crosshair; }
+    .hud-box { position:absolute; pointer-events:none; display:none; padding:8px 12px; border-radius:8px; background:rgba(7,17,31,.94); border:1px solid var(--cyan); box-shadow:0 8px 25px rgba(0,0,0,.6); font-size:11px; line-height:1.45; color:#e0f2fe; z-index:10; backdrop-filter:blur(8px); }
+    .threshold-slider { width:100%; accent-color:var(--cyan); height:6px; border-radius:3px; background:#1e293b; outline:none; margin:10px 0 6px; cursor:pointer; }
+    .badge-gpu { border-color:rgba(52,211,153,.4); color:#86efac; background:rgba(16,185,129,.1); font-weight:700; }
 
     .hidden { display:none !important; }
     #toast-region { position:fixed; right:18px; bottom:18px; z-index:10; display:grid; gap:8px; max-width:340px; }
@@ -315,27 +323,39 @@
           <div class="card" style="margin-top:16px;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
             <div>
               <div class="eyebrow">Dual Model Analysis Selector</div>
-              <h4 style="margin:2px 0 0;font-size:14px" id="selected-model-heading">Inspecting Champion Model: AlexzanderXS (Hist Gradient Boosting)</h4>
+              <h4 style="margin:2px 0 0;font-size:14px" id="selected-model-heading">Inspecting Champion Model: AlexzanderXS (GPU XGBoost)</h4>
             </div>
-            <div style="display:flex;gap:8px">
-              <button id="tab-model-alex" class="button" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('AlexzanderXS')" type="button">🏆 AlexzanderXS (Champion · HistGB)</button>
-              <button id="tab-model-porus" class="button secondary" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('PorusXS')" type="button">⚡ PorusXS (Challenger · Balanced RF)</button>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--muted)">
+                <input type="checkbox" id="toggle-overlay" checked onchange="toggleOverlay(this.checked)">
+                <span>Overlaid Multi-Model Curves</span>
+              </label>
+              <div style="display:flex;gap:8px">
+                <button id="tab-model-alex" class="button" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('AlexzanderXS')" type="button">🏆 AlexzanderXS (Champion · GPU)</button>
+                <button id="tab-model-porus" class="button secondary" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('PorusXS')" type="button">⚡ PorusXS (Challenger · RF)</button>
+              </div>
             </div>
           </div>
 
           <div class="grid split" style="margin-top:18px">
             <article class="card">
-              <h3>Champion holdout metrics</h3>
-              <p>These values are never calculated on the same rows used for training.</p>
-              <div class="metric-grid">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <h3>Holdout Evaluation Telemetry</h3>
+                <span class="pill badge-gpu" id="metric-device-badge">⚡ NVIDIA CUDA</span>
+              </div>
+              <p>Evaluated strictly on held-out stratified records never seen during training.</p>
+              <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
                 <div class="metric"><span>ROC-AUC</span><b class="cyan" id="metric-auc">—</b></div>
                 <div class="metric"><span>PR-AUC</span><b class="violet" id="metric-prauc">—</b></div>
                 <div class="metric"><span>F1 score</span><b id="metric-f1">—</b></div>
                 <div class="metric"><span>Precision</span><b id="metric-precision">—</b></div>
                 <div class="metric"><span>Recall</span><b class="green" id="metric-recall">—</b></div>
-                <div class="metric"><span>Balanced accuracy</span><b id="metric-balanced">—</b></div>
+                <div class="metric"><span>Balanced Acc</span><b id="metric-balanced">—</b></div>
+                <div class="metric"><span>Calibration ECE</span><b class="amber" id="metric-ece">—</b></div>
+                <div class="metric"><span>Brier Score</span><b id="metric-brier">—</b></div>
+                <div class="metric"><span>Matthews (MCC)</span><b id="metric-mcc">—</b></div>
               </div>
-              <div class="notice">Interpret the result as a decision-support signal, not an automated hiring, firing, or promotion decision. Model importance is not proof of causality.</div>
+              <div class="notice">Decision-support instrument only. Disparate outcome thresholds must be audited by human HR partners before any retention conversation.</div>
             </article>
             <article class="card">
               <h3>Feature importance</h3>
@@ -348,12 +368,36 @@
             <article class="card">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <div>
-                  <h3>Holdout Confusion Matrix</h3>
-                  <p>Evaluated on unseen test records (Decision threshold: <span id="cm-threshold">50%</span>)</p>
+                  <h3>Threshold &amp; Financial Cost Matrix</h3>
+                  <p>Operating cutoff: <b class="cyan" id="cm-threshold">33.0%</b> · Holdout Acc: <span id="cm-accuracy-pill">93.5%</span></p>
                 </div>
-                <span class="pill live" id="cm-accuracy-pill">Accuracy: —</span>
+                <button class="button secondary" style="padding:4px 9px;font-size:11px" onclick="resetOptimalThreshold()" type="button">↺ Reset Optimal</button>
               </div>
-              <div class="confusion-grid">
+
+              <div style="margin-top:10px">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+                  <span>Low Cutoff (0.02) · High Recall</span>
+                  <span>Slider Cutoff: <b id="slider-val-label" class="cyan">0.33</b></span>
+                  <span>High Cutoff (0.98) · High Precision</span>
+                </div>
+                <input type="range" id="thresh-slider" min="0.02" max="0.98" step="0.01" value="0.33" class="threshold-slider" oninput="onThresholdSlider(parseFloat(this.value))">
+                <div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted);margin-top:4px">
+                  <span>F1: <b id="dyn-f1" style="color:#edf4ff">—</b></span>
+                  <span>Prec: <b id="dyn-prec" style="color:#edf4ff">—</b></span>
+                  <span>Recall: <b id="dyn-rec" style="color:var(--green)">—</b></span>
+                  <span>Spec: <b id="dyn-spec" style="color:#edf4ff">—</b></span>
+                </div>
+              </div>
+
+              <div style="padding:8px 12px;border-radius:8px;background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.25);margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <span class="eyebrow" style="color:var(--cyan)">Net Financial ROI Model</span>
+                  <div style="font-size:11px;color:var(--muted)" id="dyn-roi-breakdown">Retained: 0 (+$0) · Interventions: 0 (-$0)</div>
+                </div>
+                <b class="green" style="font-size:18px" id="dyn-net-roi">$0</b>
+              </div>
+
+              <div class="confusion-grid" style="margin-top:12px">
                 <div class="cm-cell cm-tn">
                   <span class="cm-label">True Negative (Stay)</span>
                   <strong id="cm-tn-val">—</strong>
@@ -382,19 +426,28 @@
             </article>
 
             <article class="card">
-              <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <div>
-                  <h3>ROC Discrimination Curve</h3>
-                  <p>Sensitivity vs False Alarm Rate across all thresholds</p>
+                  <h3 id="observatory-chart-title">Research Observatory: ROC Curve</h3>
+                  <p id="observatory-chart-sub">Sensitivity vs False Alarm Rate across all operating points</p>
                 </div>
-                <span class="pill live cyan" id="roc-auc-badge">ROC-AUC: —</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <button class="curve-tab-btn active" id="tab-curve-roc" onclick="setCurveTab('roc')" type="button">ROC</button>
+                  <button class="curve-tab-btn" id="tab-curve-pr" onclick="setCurveTab('pr')" type="button">PR Curve</button>
+                  <button class="curve-tab-btn" id="tab-curve-cal" onclick="setCurveTab('cal')" type="button">Calibration</button>
+                  <span class="pill live cyan" id="roc-auc-badge">ROC-AUC: —</span>
+                </div>
               </div>
-              <div class="roc-wrapper">
-                <svg id="roc-svg" viewBox="0 0 320 190" class="roc-chart"></svg>
+
+              <div class="obs-chart-wrap" id="obs-chart-container">
+                <svg id="roc-svg" viewBox="0 0 330 200" class="obs-chart"></svg>
+                <div id="curve-hud" class="hud-box"></div>
               </div>
-              <div class="roc-legend">
-                <span><i class="dot"></i>Champion ROC</span>
-                <span><span style="border-bottom:1px dashed var(--dim);width:14px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Random Chance (0.50)</span>
+
+              <div class="roc-legend" id="obs-legend" style="margin-top:10px">
+                <span><i class="dot" style="background:#22d3ee"></i>AlexzanderXS (Champion · GPU)</span>
+                <span><i class="dot" style="background:#a78bfa"></i>PorusXS (Challenger · RF)</span>
+                <span><span style="border-bottom:1px dashed var(--dim);width:14px;display:inline-block;vertical-align:middle;margin-right:5px"></span>Reference Baseline</span>
               </div>
             </article>
           </div>
@@ -402,7 +455,7 @@
           <article class="card" style="margin-top:16px">
             <h3>PorusXS vs AlexzanderXS</h3>
             <p>Both candidates train on the identical training split and are compared with PR-AUC first, because attrition is commonly imbalanced.</p>
-            <div class="table-wrap"><table class="metric-table"><thead><tr><th>Model</th><th>Algorithm</th><th>ROC-AUC</th><th>PR-AUC</th><th>F1</th><th>Recall</th><th>Decision</th></tr></thead><tbody id="comparison-body"><tr><td colspan="7" class="empty">No evaluation report yet.</td></tr></tbody></table></div>
+            <div class="table-wrap"><table class="metric-table"><thead><tr><th>Model</th><th>Algorithm</th><th>ROC-AUC</th><th>PR-AUC</th><th>F1</th><th>Recall</th><th>ECE</th><th>Hardware</th><th>Decision</th></tr></thead><tbody id="comparison-body"><tr><td colspan="9" class="empty">No evaluation report yet.</td></tr></tbody></table></div>
           </article>
         </section>
 
@@ -537,11 +590,23 @@
     }
     function showComparison(items, active) {
       const body = q("#comparison-body"); body.replaceChildren();
-      if (!items || !items.length) { const row = document.createElement("tr"); const cell = createCell("No evaluation report yet."); cell.colSpan = 7; row.appendChild(cell); body.appendChild(row); return; }
+      if (!items || !items.length) { const row = document.createElement("tr"); const cell = createCell("No evaluation report yet."); cell.colSpan = 9; row.appendChild(cell); body.appendChild(row); return; }
       items.forEach((item) => {
         const row = document.createElement("tr");
         if (item.model_name === active) row.className = "champion";
-        [item.model_name, item.algorithm, item.roc_auc, item.pr_auc, item.f1, item.recall, item.model_name === active ? "Champion" : "Candidate"].forEach((value) => row.appendChild(createCell(typeof value === "number" ? value.toFixed(3) : value)));
+        const devText = item.hardware_device === "cuda" ? "⚡ CUDA" : "CPU";
+        const roleText = item.model_name === active ? "🏆 Champion" : "Candidate";
+        [
+          item.model_name,
+          item.algorithm,
+          typeof item.roc_auc === "number" ? item.roc_auc.toFixed(4) : item.roc_auc,
+          typeof item.pr_auc === "number" ? item.pr_auc.toFixed(4) : item.pr_auc,
+          typeof item.f1 === "number" ? item.f1.toFixed(3) : item.f1,
+          typeof item.recall === "number" ? item.recall.toFixed(3) : item.recall,
+          typeof item.ece === "number" ? item.ece.toFixed(4) : (item.ece || "—"),
+          devText,
+          roleText
+        ].forEach((value) => row.appendChild(createCell(value)));
         body.appendChild(row);
       });
     }
@@ -566,25 +631,130 @@
       setText("#cm-tp-val", cm.tp.toLocaleString());
       setText("#cm-tp-pct", ((cm.tp / total) * 100).toFixed(1) + "% of holdout");
       const acc = (((cm.tn + cm.tp) / total) * 100).toFixed(2);
-      setText("#cm-accuracy-pill", "Holdout Acc: " + acc + "%");
+      setText("#cm-accuracy-pill", acc + "%");
       if (threshold !== undefined) {
         setText("#cm-threshold", (Number(threshold) * 100).toFixed(1) + "%");
       }
     }
 
-    function renderRocCurve(points, auc) {
+    function onThresholdSlider(tauVal, sourceMetrics) {
+      const activeCandidate = sourceMetrics || (state.selectedAnalysisModel
+        ? (state.modelComparison || []).find(m => m.model_name === state.selectedAnalysisModel) || state.metrics
+        : state.metrics);
+
+      setText("#slider-val-label", (tauVal * 100).toFixed(1) + "%");
+      setText("#cm-threshold", (tauVal * 100).toFixed(1) + "%");
+
+      const list = activeCandidate.threshold_metrics || state.currentThresholdMetrics || [];
+      if (!list.length) {
+        if (activeCandidate.confusion) {
+          renderConfusionMatrix(activeCandidate.confusion, tauVal);
+        }
+        return;
+      }
+
+      let closest = list[0];
+      let minDiff = Math.abs(closest.threshold - tauVal);
+      for (let i = 1; i < list.length; i++) {
+        const diff = Math.abs(list[i].threshold - tauVal);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = list[i];
+        }
+      }
+
+      setText("#dyn-f1", (closest.f1 * 100).toFixed(1) + "%");
+      setText("#dyn-prec", (closest.precision * 100).toFixed(1) + "%");
+      setText("#dyn-rec", (closest.recall * 100).toFixed(1) + "%");
+      setText("#dyn-spec", (closest.specificity * 100).toFixed(1) + "%");
+
+      setText("#dyn-net-roi", money(closest.net_roi));
+      const retainedRev = closest.tp * 50000;
+      const interCost = (closest.tp + closest.fp) * 3500;
+      setText("#dyn-roi-breakdown", `Retained: ${closest.tp} (+$${retainedRev.toLocaleString()}) · Interventions: ${closest.tp + closest.fp} (-$${interCost.toLocaleString()})`);
+
+      renderConfusionMatrix({
+        tn: closest.tn,
+        fp: closest.fp,
+        fn: closest.fn,
+        tp: closest.tp
+      }, tauVal);
+    }
+
+    function resetOptimalThreshold() {
+      const activeCandidate = state.selectedAnalysisModel
+        ? (state.modelComparison || []).find(m => m.model_name === state.selectedAnalysisModel) || state.metrics
+        : state.metrics;
+      const opt = activeCandidate.decision_threshold || state.decisionThreshold || 0.5;
+      const slider = q("#thresh-slider");
+      if (slider) slider.value = opt;
+      onThresholdSlider(opt, activeCandidate);
+      toast("Reset to optimal empirical cutoff (" + (opt * 100).toFixed(1) + "%)", "info");
+    }
+
+    function setCurveTab(tab) {
+      state.activeCurveTab = tab;
+      ["roc", "pr", "cal"].forEach(t => {
+        const b = q("#tab-curve-" + t);
+        if (b) b.className = t === tab ? "curve-tab-btn active" : "curve-tab-btn";
+      });
+
+      const title = q("#observatory-chart-title");
+      const sub = q("#observatory-chart-sub");
+      if (tab === "roc") {
+        if (title) title.textContent = "Research Observatory: ROC Discrimination Curve";
+        if (sub) sub.textContent = "Sensitivity vs False Alarm Rate across all operating thresholds";
+      } else if (tab === "pr") {
+        if (title) title.textContent = "Research Observatory: Precision-Recall (PR) Curve";
+        if (sub) sub.textContent = "Precision vs Sensitivity (Gold standard for imbalanced turnover)";
+      } else if (tab === "cal") {
+        if (title) title.textContent = "Research Observatory: Calibration & Reliability Curve";
+        if (sub) sub.textContent = "Predicted probability deciles vs Empirical observed churn frequency (ECE)";
+      }
+      renderObservatoryChart();
+    }
+
+    function toggleOverlay(checked) {
+      state.overlayModels = checked;
+      renderObservatoryChart();
+    }
+
+    function renderObservatoryChart() {
       const svg = q("#roc-svg");
       if (!svg) return;
-      setText("#roc-auc-badge", "ROC-AUC: " + Number(auc).toFixed(4));
 
-      const x0 = 38, x1 = 308, y0 = 162, y1 = 14;
+      const alex = (state.modelComparison || []).find(m => m.model_name === "AlexzanderXS") || state.metrics;
+      const porus = (state.modelComparison || []).find(m => m.model_name === "PorusXS");
+      const currentTab = state.activeCurveTab || "roc";
+      const isOverlaid = state.overlayModels && alex && porus;
+
+      const x0 = 42, x1 = 318, y0 = 168, y1 = 16;
       const width = x1 - x0, height = y0 - y1;
+
+      const badge = q("#roc-auc-badge");
+      if (badge) {
+        if (currentTab === "roc") {
+          badge.textContent = isOverlaid && porus
+            ? `ROC-AUC: ${alex.roc_auc || 0} vs ${porus.roc_auc || 0}`
+            : `ROC-AUC: ${alex.roc_auc || 0}`;
+        } else if (currentTab === "pr") {
+          badge.textContent = isOverlaid && porus
+            ? `PR-AUC: ${alex.pr_auc || 0} vs ${porus.pr_auc || 0}`
+            : `PR-AUC: ${alex.pr_auc || 0}`;
+        } else {
+          badge.textContent = `ECE: ${alex.ece !== undefined ? Number(alex.ece).toFixed(4) : "—"}`;
+        }
+      }
 
       let svgHtml = `
         <defs>
-          <linearGradient id="roc-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3"/>
+          <linearGradient id="obs-grad-alex" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.25"/>
             <stop offset="100%" stop-color="#22d3ee" stop-opacity="0.0"/>
+          </linearGradient>
+          <linearGradient id="obs-grad-porus" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.0"/>
           </linearGradient>
         </defs>
         <!-- Grid lines -->
@@ -595,50 +765,268 @@
         <line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="#223047" stroke-width="1"/>
         <line x1="${x0 + width*0.5}" y1="${y0}" x2="${x0 + width*0.5}" y2="${y1}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
         <line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#223047" stroke-width="0.7" stroke-dasharray="3,3"/>
-
-        <!-- Axis Labels -->
-        <text x="${x0}" y="${y0 + 16}" fill="#64748b" font-size="9">0.0</text>
-        <text x="${x0 + width*0.5 - 12}" y="${y0 + 16}" fill="#64748b" font-size="9">0.5 (FPR)</text>
-        <text x="${x1 - 14}" y="${y0 + 16}" fill="#64748b" font-size="9">1.0</text>
-        <text x="12" y="${y0}" fill="#64748b" font-size="9">0.0</text>
-        <text x="12" y="${y0 - height*0.5 + 3}" fill="#64748b" font-size="9">0.5</text>
-        <text x="12" y="${y1 + 4}" fill="#64748b" font-size="9">1.0</text>
-
-        <!-- Random chance diagonal -->
-        <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4"/>
       `;
 
-      if (points && points.length > 0) {
-        let pathD = `M ${x0} ${y0}`;
-        let areaD = `M ${x0} ${y0}`;
-        points.forEach(pt => {
-          const px = x0 + pt.fpr * width;
-          const py = y0 - pt.tpr * height;
-          pathD += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
-          areaD += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
-        });
-        areaD += ` L ${x1} ${y0} Z`;
+      let activeCurveData = [];
+
+      if (currentTab === "roc") {
+        svgHtml += `
+          <text x="${x0}" y="${y0 + 15}" fill="#64748b" font-size="9">0.0</text>
+          <text x="${x0 + width*0.5 - 12}" y="${y0 + 15}" fill="#64748b" font-size="9">0.5 (FPR)</text>
+          <text x="${x1 - 14}" y="${y0 + 15}" fill="#64748b" font-size="9">1.0</text>
+          <text x="12" y="${y0}" fill="#64748b" font-size="9">0.0</text>
+          <text x="12" y="${y0 - height*0.5 + 3}" fill="#64748b" font-size="9">0.5</text>
+          <text x="12" y="${y1 + 4}" fill="#64748b" font-size="9">1.0 (TPR)</text>
+
+          <!-- Random chance diagonal -->
+          <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4"/>
+        `;
+
+        if (isOverlaid && porus && porus.roc_curve && porus.roc_curve.length) {
+          let pPath = `M ${x0} ${y0}`;
+          porus.roc_curve.forEach(pt => {
+            const px = x0 + pt.fpr * width;
+            const py = y0 - pt.tpr * height;
+            pPath += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          });
+          svgHtml += `<path d="${pPath}" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-dasharray="4,2" stroke-linecap="round" stroke-linejoin="round" />`;
+        }
+
+        if (alex && alex.roc_curve && alex.roc_curve.length) {
+          let aPath = `M ${x0} ${y0}`;
+          let aArea = `M ${x0} ${y0}`;
+          alex.roc_curve.forEach(pt => {
+            const px = x0 + pt.fpr * width;
+            const py = y0 - pt.tpr * height;
+            aPath += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+            aArea += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          });
+          aArea += ` L ${x1} ${y0} Z`;
+          svgHtml += `
+            <path d="${aArea}" fill="url(#obs-grad-alex)" />
+            <path d="${aPath}" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          `;
+          activeCurveData = alex.roc_curve;
+        }
+      } else if (currentTab === "pr") {
+        const basePrev = alex.baseline_prevalence || 0.161;
+        const pyPrev = y0 - basePrev * height;
 
         svgHtml += `
-          <path d="${areaD}" fill="url(#roc-grad)" />
-          <path d="${pathD}" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <text x="${x0}" y="${y0 + 15}" fill="#64748b" font-size="9">0.0</text>
+          <text x="${x0 + width*0.5 - 12}" y="${y0 + 15}" fill="#64748b" font-size="9">0.5 (Recall)</text>
+          <text x="${x1 - 14}" y="${y0 + 15}" fill="#64748b" font-size="9">1.0</text>
+          <text x="8" y="${y0}" fill="#64748b" font-size="9">0.0</text>
+          <text x="8" y="${y0 - height*0.5 + 3}" fill="#64748b" font-size="9">0.5</text>
+          <text x="4" y="${y1 + 4}" fill="#64748b" font-size="9">1.0 (Prec)</text>
+
+          <!-- Baseline prevalence line -->
+          <line x1="${x0}" y1="${pyPrev.toFixed(1)}" x2="${x1}" y2="${pyPrev.toFixed(1)}" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="4,4"/>
+          <text x="${x1 - 65}" y="${(pyPrev - 4).toFixed(1)}" fill="#f59e0b" font-size="8">Baseline (${(basePrev*100).toFixed(1)}%)</text>
         `;
+
+        if (isOverlaid && porus && porus.pr_curve && porus.pr_curve.length) {
+          let pPath = `M ${x0} ${y0}`;
+          porus.pr_curve.forEach(pt => {
+            const px = x0 + pt.recall * width;
+            const py = y0 - pt.precision * height;
+            pPath += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          });
+          svgHtml += `<path d="${pPath}" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-dasharray="4,2" stroke-linecap="round" stroke-linejoin="round" />`;
+        }
+
+        if (alex && alex.pr_curve && alex.pr_curve.length) {
+          let aPath = "";
+          let aArea = `M ${x0} ${y0}`;
+          alex.pr_curve.forEach((pt, i) => {
+            const px = x0 + pt.recall * width;
+            const py = y0 - pt.precision * height;
+            aPath += (i === 0 ? `M ${px.toFixed(1)} ${py.toFixed(1)}` : ` L ${px.toFixed(1)} ${py.toFixed(1)}`);
+            aArea += ` L ${px.toFixed(1)} ${py.toFixed(1)}`;
+          });
+          aArea += ` L ${x0 + (alex.pr_curve[alex.pr_curve.length - 1].recall * width).toFixed(1)} ${y0} Z`;
+          svgHtml += `
+            <path d="${aArea}" fill="url(#obs-grad-alex)" />
+            <path d="${aPath}" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          `;
+          activeCurveData = alex.pr_curve;
+        }
+      } else {
+        svgHtml += `
+          <text x="${x0}" y="${y0 + 15}" fill="#64748b" font-size="9">0.0</text>
+          <text x="${x0 + width*0.5 - 20}" y="${y0 + 15}" fill="#64748b" font-size="9">0.5 (Predicted)</text>
+          <text x="${x1 - 14}" y="${y0 + 15}" fill="#64748b" font-size="9">1.0</text>
+          <text x="8" y="${y0}" fill="#64748b" font-size="9">0.0</text>
+          <text x="8" y="${y0 - height*0.5 + 3}" fill="#64748b" font-size="9">0.5</text>
+          <text x="4" y="${y1 + 4}" fill="#64748b" font-size="9">1.0 (True)</text>
+
+          <!-- Perfect calibration diagonal -->
+          <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#34d399" stroke-width="1.3" stroke-dasharray="4,4"/>
+          <text x="${x0 + width*0.5 - 28}" y="${y0 - height*0.5 - 6}" fill="#34d399" font-size="8">Perfect Calibration (y = x)</text>
+        `;
+
+        if (isOverlaid && porus && porus.calibration_curve && porus.calibration_curve.length) {
+          let pPath = "";
+          porus.calibration_curve.forEach((pt, i) => {
+            const px = x0 + pt.prob_pred * width;
+            const py = y0 - pt.prob_true * height;
+            pPath += (i === 0 ? `M ${px.toFixed(1)} ${py.toFixed(1)}` : ` L ${px.toFixed(1)} ${py.toFixed(1)}`);
+            svgHtml += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3" fill="#a78bfa" />`;
+          });
+          svgHtml += `<path d="${pPath}" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-dasharray="3,3" />`;
+        }
+
+        if (alex && alex.calibration_curve && alex.calibration_curve.length) {
+          let aPath = "";
+          alex.calibration_curve.forEach((pt, i) => {
+            const px = x0 + pt.prob_pred * width;
+            const py = y0 - pt.prob_true * height;
+            aPath += (i === 0 ? `M ${px.toFixed(1)} ${py.toFixed(1)}` : ` L ${px.toFixed(1)} ${py.toFixed(1)}`);
+            svgHtml += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="#22d3ee" stroke="#07111f" stroke-width="1" />`;
+          });
+          svgHtml += `<path d="${aPath}" fill="none" stroke="#22d3ee" stroke-width="2.3" stroke-linecap="round" />`;
+          activeCurveData = alex.calibration_curve;
+        }
       }
+
+      svgHtml += `
+        <line id="obs-cross-x" x1="0" y1="0" x2="0" y2="0" stroke="#60a5fa" stroke-width="0.8" stroke-dasharray="2,2" style="display:none" />
+        <line id="obs-cross-y" x1="0" y1="0" x2="0" y2="0" stroke="#60a5fa" stroke-width="0.8" stroke-dasharray="2,2" style="display:none" />
+        <circle id="obs-cross-dot" cx="0" cy="0" r="4.5" fill="#22d3ee" stroke="#ffffff" stroke-width="1.5" style="display:none" />
+      `;
+
       svg.innerHTML = svgHtml;
+      setupObservatoryHUD(svg, activeCurveData, currentTab, x0, x1, y0, y1, width, height, isOverlaid, porus);
+    }
+
+    function setupObservatoryHUD(svg, points, tab, x0, x1, y0, y1, width, height, isOverlaid, porus) {
+      const hud = q("#curve-hud");
+      const crossX = q("#obs-cross-x");
+      const crossY = q("#obs-cross-y");
+      const crossDot = q("#obs-cross-dot");
+      if (!hud || !points || !points.length) return;
+
+      svg.onmousemove = (e) => {
+        const rect = svg.getBoundingClientRect();
+        const svgScaleX = 330 / rect.width;
+        const mouseSvgX = (e.clientX - rect.left) * svgScaleX;
+        const normX = Math.max(0, Math.min(1, (mouseSvgX - x0) / width));
+
+        let bestPt = points[0];
+        let minD = Infinity;
+
+        if (tab === "roc") {
+          points.forEach(pt => {
+            const d = Math.abs(pt.fpr - normX);
+            if (d < minD) { minD = d; bestPt = pt; }
+          });
+        } else if (tab === "pr") {
+          points.forEach(pt => {
+            const d = Math.abs(pt.recall - normX);
+            if (d < minD) { minD = d; bestPt = pt; }
+          });
+        } else {
+          points.forEach(pt => {
+            const d = Math.abs(pt.prob_pred - normX);
+            if (d < minD) { minD = d; bestPt = pt; }
+          });
+        }
+
+        const dotX = tab === "roc" ? x0 + bestPt.fpr * width
+          : (tab === "pr" ? x0 + bestPt.recall * width : x0 + bestPt.prob_pred * width);
+        const dotY = tab === "roc" ? y0 - bestPt.tpr * height
+          : (tab === "pr" ? y0 - bestPt.precision * height : y0 - bestPt.prob_true * height);
+
+        if (crossX && crossY && crossDot) {
+          crossX.setAttribute("x1", dotX); crossX.setAttribute("y1", y1);
+          crossX.setAttribute("x2", dotX); crossX.setAttribute("y2", y0);
+          crossX.style.display = "block";
+
+          crossY.setAttribute("x1", x0); crossY.setAttribute("y1", dotY);
+          crossY.setAttribute("x2", x1); crossY.setAttribute("y2", dotY);
+          crossY.style.display = "block";
+
+          crossDot.setAttribute("cx", dotX); crossDot.setAttribute("cy", dotY);
+          crossDot.style.display = "block";
+        }
+
+        let hudHtml = "";
+        if (tab === "roc") {
+          hudHtml = `
+            <div style="font-weight:800;color:var(--cyan);margin-bottom:2px">Cutoff Point (τ: ${(bestPt.threshold*100).toFixed(1)}%)</div>
+            <div>Sensitivity (TPR): <b>${(bestPt.tpr*100).toFixed(1)}%</b></div>
+            <div>False Alarm (FPR): <b>${(bestPt.fpr*100).toFixed(1)}%</b></div>
+            <div>Holdout F1: <b>${(bestPt.f1*100).toFixed(1)}%</b></div>
+          `;
+          if (isOverlaid && porus && porus.roc_curve && porus.roc_curve.length) {
+            let pPt = porus.roc_curve.reduce((p, c) => Math.abs(c.fpr - bestPt.fpr) < Math.abs(p.fpr - bestPt.fpr) ? c : p);
+            hudHtml += `<div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--line);color:#a78bfa">PorusXS TPR: ${(pPt.tpr*100).toFixed(1)}% · F1: ${(pPt.f1*100).toFixed(1)}%</div>`;
+          }
+        } else if (tab === "pr") {
+          hudHtml = `
+            <div style="font-weight:800;color:var(--cyan);margin-bottom:2px">Cutoff Point (τ: ${(bestPt.threshold*100).toFixed(1)}%)</div>
+            <div>Recall (Catch): <b>${(bestPt.recall*100).toFixed(1)}%</b></div>
+            <div>Precision: <b>${(bestPt.precision*100).toFixed(1)}%</b></div>
+            <div>Holdout F1: <b>${(bestPt.f1*100).toFixed(1)}%</b></div>
+          `;
+        } else {
+          hudHtml = `
+            <div style="font-weight:800;color:var(--cyan);margin-bottom:2px">Decile Bin: ${bestPt.bin_name}</div>
+            <div>Predicted Risk: <b>${(bestPt.prob_pred*100).toFixed(1)}%</b></div>
+            <div>Observed Churn: <b>${(bestPt.prob_true*100).toFixed(1)}%</b></div>
+            <div>Holdout Count: <b>${bestPt.bin_count}</b></div>
+          `;
+        }
+
+        hud.innerHTML = hudHtml;
+        hud.style.display = "block";
+
+        const hudLeft = Math.min(rect.width - 170, Math.max(10, e.clientX - rect.left + 12));
+        const hudTop = Math.max(10, e.clientY - rect.top - 60);
+        hud.style.left = hudLeft + "px";
+        hud.style.top = hudTop + "px";
+      };
+
+      svg.onmouseleave = () => {
+        hud.style.display = "none";
+        if (crossX) crossX.style.display = "none";
+        if (crossY) crossY.style.display = "none";
+        if (crossDot) crossDot.style.display = "none";
+      };
     }
 
     function showMetrics(metrics) {
-      setMetric("#metric-auc", metrics.roc_auc); setMetric("#metric-prauc", metrics.pr_auc); setMetric("#metric-f1", metrics.f1);
-      setMetric("#metric-precision", metrics.precision); setMetric("#metric-recall", metrics.recall); setMetric("#metric-balanced", metrics.balanced_accuracy);
+      setMetric("#metric-auc", metrics.roc_auc);
+      setMetric("#metric-prauc", metrics.pr_auc);
+      setMetric("#metric-f1", metrics.f1);
+      setMetric("#metric-precision", metrics.precision);
+      setMetric("#metric-recall", metrics.recall);
+      setMetric("#metric-balanced", metrics.balanced_accuracy);
+      setMetric("#metric-ece", metrics.ece);
+      setMetric("#metric-brier", metrics.brier_score);
+      setMetric("#metric-mcc", metrics.mcc);
       setText("#kpi-auc", metrics.roc_auc === undefined ? "—" : Number(metrics.roc_auc).toFixed(3));
-      
+
+      const dev = metrics.hardware_device || "cpu";
+      const devBadge = q("#metric-device-badge");
+      if (devBadge) {
+        if (dev === "cuda") {
+          devBadge.textContent = "⚡ NVIDIA CUDA (GTX 1650)";
+          devBadge.className = "pill badge-gpu";
+        } else {
+          devBadge.textContent = "CPU (Vectorized)";
+          devBadge.className = "pill";
+        }
+      }
+
       state.decisionThreshold = metrics.decision_threshold !== undefined ? metrics.decision_threshold : 0.5;
-      if (metrics.confusion) {
-        renderConfusionMatrix(metrics.confusion, state.decisionThreshold);
-      }
-      if (metrics.roc_curve && metrics.roc_curve.length > 0) {
-        renderRocCurve(metrics.roc_curve, metrics.roc_auc || 0);
-      }
+      state.currentThresholdMetrics = metrics.threshold_metrics || [];
+
+      const slider = q("#thresh-slider");
+      if (slider) slider.value = state.decisionThreshold;
+      onThresholdSlider(state.decisionThreshold, metrics);
+
+      renderObservatoryChart();
     }
 
     function selectAnalysisModel(modelName) {
@@ -650,7 +1038,7 @@
       if (modelName === "AlexzanderXS") {
         if (btnAlex) btnAlex.className = "button";
         if (btnPorus) btnPorus.className = "button secondary";
-        if (heading) heading.textContent = "Inspecting Champion Model: AlexzanderXS (Histogram Gradient Boosting)";
+        if (heading) heading.textContent = "Inspecting Champion Model: AlexzanderXS (GPU XGBoost)";
       } else {
         if (btnAlex) btnAlex.className = "button secondary";
         if (btnPorus) btnPorus.className = "button";
@@ -661,19 +1049,7 @@
         || (modelName === state.activeModel ? state.metrics : null);
 
       if (candidate) {
-        setMetric("#metric-auc", candidate.roc_auc);
-        setMetric("#metric-prauc", candidate.pr_auc);
-        setMetric("#metric-f1", candidate.f1);
-        setMetric("#metric-precision", candidate.precision);
-        setMetric("#metric-recall", candidate.recall);
-        setMetric("#metric-balanced", candidate.balanced_accuracy);
-
-        if (candidate.confusion) {
-          renderConfusionMatrix(candidate.confusion, candidate.decision_threshold);
-        }
-        if (candidate.roc_curve && candidate.roc_curve.length > 0) {
-          renderRocCurve(candidate.roc_curve, candidate.roc_auc || 0);
-        }
+        showMetrics(candidate);
         toast(`Viewing analysis for ${modelName}`, "info");
       }
     }

@@ -36,31 +36,61 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
+from functools import lru_cache
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.base import clone
 
 logger = logging.getLogger(__name__)
 
-# Canonical descriptions displayed in the dual-classifier lab view.
-MODEL_DETAILS: dict[str, dict[str, str]] = {
-    "PorusXS": {
-        "algorithm": "Optimized Balanced Random Forest",
-        "description": (
-            "Ensemble of decorrelated decision trees using balanced sub-sample "
-            "weighting. Captures high-order interactions and nonlinear turnover "
-            "signals with robust generalization."
-        ),
-    },
-    "AlexzanderXS": {
-        "algorithm": "Histogram Gradient Boosting",
-        "description": (
+
+@lru_cache(maxsize=1)
+def _detect_cuda_device() -> str:
+    """Detect if NVIDIA CUDA hardware acceleration is available for XGBoost."""
+    try:
+        import xgboost as xgb
+
+        test_clf = xgb.XGBClassifier(n_estimators=1, tree_method="hist", device="cuda", verbosity=0)
+        test_clf.fit(np.zeros((2, 2)), np.array([0, 1]))
+        logger.info("NVIDIA CUDA hardware acceleration active for XGBoost.")
+        return "cuda"
+    except Exception as exc:
+        logger.info("NVIDIA CUDA acceleration not available (%s); falling back to CPU.", exc)
+        return "cpu"
+
+
+def _get_model_details() -> dict[str, dict[str, str]]:
+    cuda_active = _detect_cuda_device() == "cuda"
+    algo_alex = "XGBoost (GPU-Accelerated)" if cuda_active else "Histogram Gradient Boosting"
+    desc_alex = (
+        "Enterprise-grade histogram-binned gradient-boosted decision tree with "
+        "NVIDIA CUDA acceleration, L2 regularization, early stopping, and lossguide tree growth. "
+        "Excels at subtle, non-linear feature threshold interactions."
+        if cuda_active
+        else (
             "State-of-the-art histogram-binned gradient-boosted decision tree with "
             "L2 regularization, early stopping, and native class balancing. "
             "Excels at subtle, non-linear feature threshold interactions."
-        ),
-    },
-}
+        )
+    )
+    return {
+        "PorusXS": {
+            "algorithm": "Optimized Balanced Random Forest",
+            "description": (
+                "Ensemble of decorrelated decision trees using balanced sub-sample "
+                "weighting. Captures high-order interactions and nonlinear turnover "
+                "signals with robust generalization."
+            ),
+        },
+        "AlexzanderXS": {
+            "algorithm": algo_alex,
+            "description": desc_alex,
+        },
+    }
+
+
+# Canonical descriptions displayed in the dual-classifier lab view.
+MODEL_DETAILS: dict[str, dict[str, str]] = _get_model_details()
 
 _CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
@@ -144,31 +174,62 @@ class KaizenEngine:
                 max_samples=max_samples,
                 class_weight="balanced_subsample",
                 bootstrap=True,
-                n_jobs=1,
+                n_jobs=-1,
                 random_state=42,
             )
         if model_name == "AlexzanderXS":
-            if n_samples > 200_000:
-                max_iter = 250
-                early_stopping = True
-            elif n_samples > 20_000:
-                max_iter = 300
-                early_stopping = False
-            else:
-                max_iter = 350
-                early_stopping = False
+            cuda_device = _detect_cuda_device()
+            try:
+                import xgboost as xgb
 
-            return HistGradientBoostingClassifier(
-                max_iter=max_iter,
-                learning_rate=0.038 if n_samples > 200_000 else 0.035,
-                max_leaf_nodes=31,
-                min_samples_leaf=16 if n_samples > 200_000 else 12,
-                l2_regularization=0.5,
-                class_weight="balanced",
-                early_stopping=early_stopping,
-                n_iter_no_change=12 if n_samples > 200_000 else 10,
-                random_state=42,
-            )
+                if n_samples > 200_000:
+                    n_estimators = 250
+                    learning_rate = 0.038
+                elif n_samples > 20_000:
+                    n_estimators = 300
+                    learning_rate = 0.035
+                else:
+                    n_estimators = 300
+                    learning_rate = 0.035
+
+                return xgb.XGBClassifier(
+                    n_estimators=n_estimators,
+                    learning_rate=learning_rate,
+                    max_leaves=31,
+                    grow_policy="lossguide",
+                    tree_method="hist",
+                    device=cuda_device,
+                    reg_lambda=0.5,
+                    subsample=0.85,
+                    colsample_bytree=0.85,
+                    eval_metric="logloss",
+                    random_state=42,
+                    verbosity=0,
+                    n_jobs=-1 if cuda_device == "cpu" else None,
+                )
+            except Exception as exc:
+                logger.warning("XGBoost initialization fallback (%s); using HistGradientBoostingClassifier", exc)
+                if n_samples > 200_000:
+                    max_iter = 250
+                    early_stopping = True
+                elif n_samples > 20_000:
+                    max_iter = 300
+                    early_stopping = False
+                else:
+                    max_iter = 350
+                    early_stopping = False
+
+                return HistGradientBoostingClassifier(
+                    max_iter=max_iter,
+                    learning_rate=0.038 if n_samples > 200_000 else 0.035,
+                    max_leaf_nodes=31,
+                    min_samples_leaf=16 if n_samples > 200_000 else 12,
+                    l2_regularization=0.5,
+                    class_weight="balanced",
+                    early_stopping=early_stopping,
+                    n_iter_no_change=12 if n_samples > 200_000 else 10,
+                    random_state=42,
+                )
         raise ValueError(f"Unknown candidate model: {model_name}")
 
     def _build_pipeline(self, model_name: str, n_samples: int = 1000) -> Pipeline:
@@ -233,35 +294,209 @@ class KaizenEngine:
 
     @staticmethod
     def _evaluate(
-        y_true: pd.Series,
+        y_true: pd.Series | np.ndarray,
         probabilities: np.ndarray,
         model_name: str,
         threshold: float,
+        hardware_device: str | None = None,
     ) -> dict[str, Any]:
         """Compute full classification telemetry on held-out data."""
+        y_true_arr = np.asarray(y_true, dtype=int)
         predictions = (probabilities >= threshold).astype(int)
-        cm = confusion_matrix(y_true, predictions, labels=[0, 1])
+        cm = confusion_matrix(y_true_arr, predictions, labels=[0, 1])
 
-        # Downsample ROC curve to 25 smooth interpolation points
-        fpr_raw, tpr_raw, _ = roc_curve(y_true, probabilities)
-        indices = np.linspace(0, len(fpr_raw) - 1, min(len(fpr_raw), 25), dtype=int)
-        roc_points = [
-            {"fpr": round(float(fpr_raw[i]), 4), "tpr": round(float(tpr_raw[i]), 4)}
-            for i in indices
+        # High-resolution ROC curve with hover HUD telemetry (tau, TPR, FPR, F1)
+        fpr_raw, tpr_raw, thresholds_raw = roc_curve(y_true_arr, probabilities)
+        roc_len = len(fpr_raw)
+        roc_indices = (
+            np.arange(roc_len)
+            if roc_len <= 80
+            else np.unique(np.linspace(0, roc_len - 1, 80, dtype=int))
+        )
+        pos_count = float(np.sum(y_true_arr == 1))
+        neg_count = float(np.sum(y_true_arr == 0))
+        roc_points = []
+        for i in roc_indices:
+            fpr_val = float(fpr_raw[i])
+            tpr_val = float(tpr_raw[i])
+            t_val = float(thresholds_raw[i])
+            if t_val > 1.0:
+                t_val = 1.0
+            tp_est = tpr_val * pos_count
+            fp_est = fpr_val * neg_count
+            prec_est = tp_est / (tp_est + fp_est) if (tp_est + fp_est) > 0 else 0.0
+            f1_est = (
+                2.0 * prec_est * tpr_val / (prec_est + tpr_val)
+                if (prec_est + tpr_val) > 0
+                else 0.0
+            )
+            roc_points.append(
+                {
+                    "fpr": round(fpr_val, 4),
+                    "tpr": round(tpr_val, 4),
+                    "threshold": round(t_val, 4),
+                    "f1": round(f1_est, 4),
+                }
+            )
+
+        # High-resolution Precision-Recall (PR) curve
+        prec_raw, rec_raw, pr_thresholds = precision_recall_curve(y_true_arr, probabilities)
+        pr_len = len(prec_raw)
+        pr_indices = (
+            np.arange(pr_len)
+            if pr_len <= 80
+            else np.unique(np.linspace(0, pr_len - 1, 80, dtype=int))
+        )
+        pr_points = []
+        for i in pr_indices:
+            prec_val = float(prec_raw[i])
+            rec_val = float(rec_raw[i])
+            t_val = float(pr_thresholds[i]) if i < len(pr_thresholds) else 1.0
+            f1_est = (
+                2.0 * prec_val * rec_val / (prec_val + rec_val)
+                if (prec_val + rec_val) > 0
+                else 0.0
+            )
+            pr_points.append(
+                {
+                    "recall": round(rec_val, 4),
+                    "precision": round(prec_val, 4),
+                    "threshold": round(t_val, 4),
+                    "f1": round(f1_est, 4),
+                }
+            )
+
+        # 10-bin Calibration & Reliability Curve with Expected Calibration Error (ECE)
+        n_samples = len(y_true_arr)
+        cal_points = []
+        ece = 0.0
+        reliability = 0.0
+        resolution = 0.0
+        base_prev = float(np.mean(y_true_arr)) if n_samples > 0 else 0.0
+        uncertainty = float(base_prev * (1.0 - base_prev))
+
+        for b in range(10):
+            lo = b / 10.0
+            hi = (b + 1) / 10.0
+            bin_mask = (
+                (probabilities >= lo) & (probabilities <= hi)
+                if b == 9
+                else (probabilities >= lo) & (probabilities < hi)
+            )
+            bin_count = int(np.sum(bin_mask))
+            if bin_count > 0:
+                p_pred = float(np.mean(probabilities[bin_mask]))
+                p_true = float(np.mean(y_true_arr[bin_mask]))
+                weight = bin_count / max(n_samples, 1)
+                ece += weight * abs(p_true - p_pred)
+                reliability += weight * ((p_pred - p_true) ** 2)
+                resolution += weight * ((p_true - base_prev) ** 2)
+            else:
+                p_pred = round((lo + hi) / 2.0, 3)
+                p_true = p_pred
+            cal_points.append(
+                {
+                    "bin_midpoint": round((lo + hi) / 2.0, 2),
+                    "prob_pred": round(p_pred, 4),
+                    "prob_true": round(p_true, 4),
+                    "bin_count": bin_count,
+                    "bin_name": f"{int(lo * 100)}-{int(hi * 100)}%",
+                }
+            )
+
+        brier_val = round(float(brier_score_loss(y_true_arr, probabilities)), 4)
+        brier_decomp = {
+            "brier_score": brier_val,
+            "reliability": round(reliability, 4),
+            "resolution": round(resolution, 4),
+            "uncertainty": round(uncertainty, 4),
+            "ece": round(ece, 4),
+        }
+
+        # Vectorized threshold sweep (49 operating points across tau in [0.02, 0.98])
+        sweep_thresholds = np.linspace(0.02, 0.98, 49)
+        preds_mat = (probabilities[:, None] >= sweep_thresholds[None, :]).astype(int)
+        tp_arr = np.sum((y_true_arr[:, None] == 1) & (preds_mat == 1), axis=0)
+        fp_arr = np.sum((y_true_arr[:, None] == 0) & (preds_mat == 1), axis=0)
+        fn_arr = np.sum((y_true_arr[:, None] == 1) & (preds_mat == 0), axis=0)
+        tn_arr = np.sum((y_true_arr[:, None] == 0) & (preds_mat == 0), axis=0)
+
+        acc_arr = (tp_arr + tn_arr) / max(n_samples, 1)
+        prec_arr = np.divide(
+            tp_arr.astype(float),
+            (tp_arr + fp_arr).astype(float),
+            out=np.zeros(len(tp_arr), dtype=float),
+            where=(tp_arr + fp_arr) > 0,
+        )
+        rec_arr = np.divide(
+            tp_arr.astype(float),
+            (tp_arr + fn_arr).astype(float),
+            out=np.zeros(len(tp_arr), dtype=float),
+            where=(tp_arr + fn_arr) > 0,
+        )
+        spec_arr = np.divide(
+            tn_arr.astype(float),
+            (tn_arr + fp_arr).astype(float),
+            out=np.zeros(len(tn_arr), dtype=float),
+            where=(tn_arr + fp_arr) > 0,
+        )
+        pr_sum = prec_arr + rec_arr
+        f1_arr = np.divide(
+            2.0 * prec_arr * rec_arr,
+            pr_sum,
+            out=np.zeros(len(prec_arr), dtype=float),
+            where=pr_sum > 0,
+        )
+        bacc_arr = 0.5 * (rec_arr + spec_arr)
+
+        denom = (tp_arr + fp_arr).astype(float) * (tp_arr + fn_arr) * (tn_arr + fp_arr) * (tn_arr + fn_arr)
+        sqrt_denom = np.sqrt(np.maximum(denom, 0.0))
+        mcc_arr = np.divide(
+            (tp_arr.astype(float) * tn_arr - fp_arr.astype(float) * fn_arr),
+            sqrt_denom,
+            out=np.zeros(len(tp_arr), dtype=float),
+            where=sqrt_denom > 0,
+        )
+
+        # Net Business ROI: ($50k replacement cost retained - $3.5k intervention on flagged)
+        net_roi_arr = (tp_arr.astype(float) * 50_000.0) - ((tp_arr + fp_arr).astype(float) * 3_500.0)
+
+        threshold_metrics = [
+            {
+                "threshold": round(float(sweep_thresholds[j]), 3),
+                "accuracy": round(float(acc_arr[j]), 4),
+                "balanced_accuracy": round(float(bacc_arr[j]), 4),
+                "precision": round(float(prec_arr[j]), 4),
+                "recall": round(float(rec_arr[j]), 4),
+                "f1": round(float(f1_arr[j]), 4),
+                "specificity": round(float(spec_arr[j]), 4),
+                "mcc": round(float(mcc_arr[j]), 4),
+                "tn": int(tn_arr[j]),
+                "fp": int(fp_arr[j]),
+                "fn": int(fn_arr[j]),
+                "tp": int(tp_arr[j]),
+                "net_roi": round(float(net_roi_arr[j]), 2),
+            }
+            for j in range(len(sweep_thresholds))
         ]
+
+        device_tag = hardware_device or (
+            "cuda" if model_name == "AlexzanderXS" and _detect_cuda_device() == "cuda" else "cpu"
+        )
+        algo_name = MODEL_DETAILS.get(model_name, {}).get("algorithm", model_name)
 
         return {
             "model_name": model_name,
-            "algorithm": MODEL_DETAILS[model_name]["algorithm"],
-            "accuracy": round(float(accuracy_score(y_true, predictions)), 4),
-            "balanced_accuracy": round(float(balanced_accuracy_score(y_true, predictions)), 4),
-            "roc_auc": round(float(roc_auc_score(y_true, probabilities)), 4),
-            "pr_auc": round(float(average_precision_score(y_true, probabilities)), 4),
-            "f1": round(float(f1_score(y_true, predictions, zero_division=0)), 4),
-            "precision": round(float(precision_score(y_true, predictions, zero_division=0)), 4),
-            "recall": round(float(recall_score(y_true, predictions, zero_division=0)), 4),
-            "brier_score": round(float(brier_score_loss(y_true, probabilities)), 4),
-            "mcc": round(float(matthews_corrcoef(y_true, predictions)), 4),
+            "algorithm": algo_name,
+            "accuracy": round(float(accuracy_score(y_true_arr, predictions)), 4),
+            "balanced_accuracy": round(float(balanced_accuracy_score(y_true_arr, predictions)), 4),
+            "roc_auc": round(float(roc_auc_score(y_true_arr, probabilities)), 4),
+            "pr_auc": round(float(average_precision_score(y_true_arr, probabilities)), 4),
+            "f1": round(float(f1_score(y_true_arr, predictions, zero_division=0)), 4),
+            "precision": round(float(precision_score(y_true_arr, predictions, zero_division=0)), 4),
+            "recall": round(float(recall_score(y_true_arr, predictions, zero_division=0)), 4),
+            "brier_score": brier_val,
+            "mcc": round(float(matthews_corrcoef(y_true_arr, predictions)), 4),
             "decision_threshold": round(float(threshold), 4),
             "confusion": {
                 "tn": int(cm[0, 0]),
@@ -270,6 +505,13 @@ class KaizenEngine:
                 "tp": int(cm[1, 1]),
             },
             "roc_curve": roc_points,
+            "pr_curve": pr_points,
+            "calibration_curve": cal_points,
+            "threshold_metrics": threshold_metrics,
+            "ece": round(ece, 4),
+            "brier_decomposition": brier_decomp,
+            "baseline_prevalence": round(base_prev, 4),
+            "hardware_device": device_tag,
         }
 
     # ------------------------------------------------------------------ #
@@ -307,21 +549,34 @@ class KaizenEngine:
             logger.info("Training candidate %s on %d rows…", name, len(X_train))
             pipe = self._build_pipeline(name, n_samples=len(X_train))
             pipe.fit(X_train, y_train)
+
+            # Move booster inference to CPU to maximize throughput and eliminate
+            # thread-safety and CUDA context-switching issues during 1-row simulation.
+            try:
+                est = pipe.named_steps["estimator"]
+                if hasattr(est, "set_params"):
+                    est.set_params(device="cpu")
+            except Exception:
+                pass
+
             candidate_pipelines[name] = pipe
 
             probs = pipe.predict_proba(X_holdout)[:, 1]
             opt_thresh = self._training_oof_threshold(pipe, X_train, y_train)
             candidate_thresholds[name] = opt_thresh
 
-            metrics = self._evaluate(y_holdout, probs, name, threshold=opt_thresh)
+            dev_tag = "cuda" if name == "AlexzanderXS" and _detect_cuda_device() == "cuda" else "cpu"
+            metrics = self._evaluate(y_holdout, probs, name, threshold=opt_thresh, hardware_device=dev_tag)
             comparisons.append(metrics)
             logger.info(
-                "%s holdout: Acc=%.4f | ROC-AUC=%.4f | PR-AUC=%.4f | F1=%.4f | Thresh=%.3f",
+                "%s (%s) holdout: Acc=%.4f | ROC-AUC=%.4f | PR-AUC=%.4f | F1=%.4f | ECE=%.4f | Thresh=%.3f",
                 name,
+                dev_tag,
                 metrics["accuracy"],
                 metrics["roc_auc"],
                 metrics["pr_auc"],
                 metrics["f1"],
+                metrics["ece"],
                 opt_thresh,
             )
 
@@ -358,6 +613,12 @@ class KaizenEngine:
         )
         self.model = self._build_pipeline(self.active_model, n_samples=len(X))
         self.model.fit(X, y.astype(int))
+        try:
+            est = self.model.named_steps["estimator"]
+            if hasattr(est, "set_params"):
+                est.set_params(device="cpu")
+        except Exception:
+            pass
 
         self.reference_profile, self.numeric_bounds = self._build_reference_and_bounds(X)
         self.feature_importances = self._calculate_feature_importances(X, y.astype(int))

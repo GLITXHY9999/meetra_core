@@ -42,6 +42,47 @@ class PredictResponse(APIModel):
 class RocPoint(APIModel):
     fpr: float
     tpr: float
+    threshold: float | None = None
+    f1: float | None = None
+
+
+class PrPoint(APIModel):
+    recall: float
+    precision: float
+    threshold: float | None = None
+    f1: float | None = None
+
+
+class CalibrationPoint(APIModel):
+    bin_midpoint: float
+    prob_pred: float
+    prob_true: float
+    bin_count: int
+    bin_name: str = ""
+
+
+class BrierDecomposition(APIModel):
+    brier_score: float
+    reliability: float
+    resolution: float
+    uncertainty: float
+    ece: float
+
+
+class ThresholdMetricPoint(APIModel):
+    threshold: float
+    accuracy: float
+    balanced_accuracy: float
+    precision: float
+    recall: float
+    f1: float
+    specificity: float
+    mcc: float
+    tn: int
+    fp: int
+    fn: int
+    tp: int
+    net_roi: float = 0.0
 
 
 class ConfusionMatrix(APIModel):
@@ -68,6 +109,13 @@ class ClassificationMetrics(APIModel):
     decision_threshold: float = 0.5
     confusion: ConfusionMatrix
     roc_curve: list[RocPoint] = []
+    pr_curve: list[PrPoint] = []
+    calibration_curve: list[CalibrationPoint] = []
+    threshold_metrics: list[ThresholdMetricPoint] = []
+    ece: float = 0.0
+    brier_decomposition: BrierDecomposition | None = None
+    baseline_prevalence: float = 0.0
+    hardware_device: str = "cpu"
 
 
 class CandidateMetrics(ClassificationMetrics):
