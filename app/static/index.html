@@ -165,6 +165,7 @@
       </div>
       <nav class="nav">
         <button class="active" data-view="overview"><span class="nav-icon">▦</span>Overview</button>
+        <button data-view="batch-audit"><span class="nav-icon">⚡</span>Batch Risk Audit</button>
         <button data-view="models"><span class="nav-icon">◫</span>Model Laboratory</button>
         <button data-view="simulator"><span class="nav-icon">◎</span>Risk Simulator</button>
       </nav>
@@ -174,7 +175,11 @@
     <main class="main">
       <header class="topbar">
         <div><h2 id="page-title">Employee Turnover &amp; Workforce Retention</h2><p id="page-subtitle">An evaluated binary-classification workflow for proactive HR support.</p></div>
-        <span class="pill" id="api-status"><span class="dot"></span>Checking API</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button id="btn-load-saved" class="button secondary" style="padding:6px 12px;font-size:12px" onclick="toggleSavedRun()" type="button">📂 Load Saved 1M Run</button>
+          <button id="btn-clear-workspace" class="button secondary" style="padding:6px 12px;font-size:12px" onclick="clearWorkspace()" type="button">🔄 Clear Workspace</button>
+          <span class="pill" id="api-status"><span class="dot"></span>Checking API</span>
+        </div>
       </header>
 
       <div class="content">
@@ -237,11 +242,87 @@
           </div>
         </section>
 
+        <section class="view" id="view-batch-audit">
+          <div class="hero">
+            <div>
+              <div class="eyebrow">Instant Inference Engine · No Retraining Required</div>
+              <h3 style="font-size:26px">Batch Workforce Risk Audit</h3>
+              <p>Audit 100 to 1,000,000 employees instantly using your saved champion model. Predicts departure risk percentages, identifies top flight drivers, and generates an enriched CSV for HR interventions.</p>
+            </div>
+            <div class="actions">
+              <button class="button secondary" id="btn-export-audit" disabled onclick="exportBatchAuditCSV()" type="button">📥 Download Scored CSV</button>
+            </div>
+          </div>
+
+          <div class="grid split" style="margin-top:18px">
+            <article class="card">
+              <h3>Upload Workforce CSV for Scoring</h3>
+              <p>Upload any employee CSV (does <b>not</b> require an Attrition column). Scores run in seconds.</p>
+              <label class="drop-zone" for="batch-input">
+                <div class="cyan" style="font-size:30px">⚡</div>
+                <strong>Drop or select a workforce CSV</strong>
+                <span>Instant vectorized batch scoring via AlexzanderXS</span>
+                <input id="batch-input" type="file" accept=".csv">
+              </label>
+              <div class="statusline"><span id="audit-status">Ready to audit workforce</span><span id="audit-speed">—</span></div>
+              <div class="mini-note">Vectorized inference scores up to 150,000 records per second without changing or refitting the saved model.</div>
+            </article>
+
+            <article class="card">
+              <h3>Workforce Risk Distribution</h3>
+              <p>Categorized flight risk breakdown for the audited batch.</p>
+              <div class="metric-grid">
+                <div class="metric"><span>Audited Total</span><b class="cyan" id="audit-total">—</b></div>
+                <div class="metric"><span>Critical Risk (≥70%)</span><b class="rose" id="audit-critical">—</b></div>
+                <div class="metric"><span>Elevated (40-70%)</span><b class="amber" id="audit-elevated">—</b></div>
+                <div class="metric"><span>Low Risk (&lt;40%)</span><b class="green" id="audit-low">—</b></div>
+                <div class="metric"><span>High-Risk Cutoff</span><b id="audit-thresh">—</b></div>
+                <div class="metric"><span>Intervention Needed</span><b class="rose" id="audit-action-req">—</b></div>
+              </div>
+            </article>
+          </div>
+
+          <article class="card" style="margin-top:16px">
+            <h3>Top High-Risk Employees in Audited Batch</h3>
+            <p>Ranked by departure probability with primary risk-pushing factors.</p>
+            <div class="table-wrap">
+              <table class="dataset-table">
+                <thead>
+                  <tr>
+                    <th>Employee ID / row</th>
+                    <th>Department</th>
+                    <th>Role</th>
+                    <th>Monthly Income</th>
+                    <th>Risk Score</th>
+                    <th>Key Departure Drivers</th>
+                    <th>Simulation</th>
+                  </tr>
+                </thead>
+                <tbody id="batch-high-risk-body">
+                  <tr><td colspan="7" class="empty">Upload a workforce CSV to view flagged employees.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <section class="view" id="view-models">
           <div class="hero">
             <div><div class="eyebrow">Evaluation before deployment</div><h3 style="font-size:26px">Model Laboratory</h3><p id="validation-note">Train a dataset to view the out-of-sample evaluation report.</p></div>
             <button class="button secondary" data-go="simulator">Open simulator</button>
           </div>
+
+          <div class="card" style="margin-top:16px;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div>
+              <div class="eyebrow">Dual Model Analysis Selector</div>
+              <h4 style="margin:2px 0 0;font-size:14px" id="selected-model-heading">Inspecting Champion Model: AlexzanderXS (Hist Gradient Boosting)</h4>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="tab-model-alex" class="button" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('AlexzanderXS')" type="button">🏆 AlexzanderXS (Champion · HistGB)</button>
+              <button id="tab-model-porus" class="button secondary" style="padding:6px 13px;font-size:12px" onclick="selectAnalysisModel('PorusXS')" type="button">⚡ PorusXS (Challenger · Balanced RF)</button>
+            </div>
+          </div>
+
           <div class="grid split" style="margin-top:18px">
             <article class="card">
               <h3>Champion holdout metrics</h3>
@@ -396,9 +477,21 @@
   <div id="toast-region" aria-live="polite"></div>
 
   <script>
-    const state = { featureSchema: [], activeModel: null, highRiskEmployees: [], baselineRisk: null, decisionThreshold: 0.5 };
+    const state = {
+      featureSchema: [],
+      activeModel: null,
+      highRiskEmployees: [],
+      baselineRisk: null,
+      decisionThreshold: 0.5,
+      modelComparison: [],
+      savedModelData: null,
+      savedRunVisible: false,
+      selectedAnalysisModel: null,
+      lastBatchFile: null,
+    };
     const pageMeta = {
       overview: ["Employee Turnover & Workforce Retention", "An evaluated binary-classification workflow for proactive HR support."],
+      "batch-audit": ["Batch Workforce Risk Audit", "Instant vectorized attrition scoring across any employee CSV without retraining."],
       models: ["Model Laboratory", "Compare both candidates on an unseen, stratified holdout set."],
       simulator: ["Attrition Risk Simulator", "Generate a transparent decision-support signal from the trained model."]
     };
@@ -547,6 +640,44 @@
         renderRocCurve(metrics.roc_curve, metrics.roc_auc || 0);
       }
     }
+
+    function selectAnalysisModel(modelName) {
+      state.selectedAnalysisModel = modelName;
+      const btnAlex = q("#tab-model-alex");
+      const btnPorus = q("#tab-model-porus");
+      const heading = q("#selected-model-heading");
+
+      if (modelName === "AlexzanderXS") {
+        if (btnAlex) btnAlex.className = "button";
+        if (btnPorus) btnPorus.className = "button secondary";
+        if (heading) heading.textContent = "Inspecting Champion Model: AlexzanderXS (Histogram Gradient Boosting)";
+      } else {
+        if (btnAlex) btnAlex.className = "button secondary";
+        if (btnPorus) btnPorus.className = "button";
+        if (heading) heading.textContent = "Inspecting Challenger Model: PorusXS (Balanced Random Forest)";
+      }
+
+      const candidate = (state.modelComparison || []).find(m => m.model_name === modelName)
+        || (modelName === state.activeModel ? state.metrics : null);
+
+      if (candidate) {
+        setMetric("#metric-auc", candidate.roc_auc);
+        setMetric("#metric-prauc", candidate.pr_auc);
+        setMetric("#metric-f1", candidate.f1);
+        setMetric("#metric-precision", candidate.precision);
+        setMetric("#metric-recall", candidate.recall);
+        setMetric("#metric-balanced", candidate.balanced_accuracy);
+
+        if (candidate.confusion) {
+          renderConfusionMatrix(candidate.confusion, candidate.decision_threshold);
+        }
+        if (candidate.roc_curve && candidate.roc_curve.length > 0) {
+          renderRocCurve(candidate.roc_curve, candidate.roc_auc || 0);
+        }
+        toast(`Viewing analysis for ${modelName}`, "info");
+      }
+    }
+
     function buildProfileForm(schema) {
       state.featureSchema = schema || [];
       const fields = q("#profile-fields"); fields.replaceChildren();
@@ -565,6 +696,8 @@
     }
     function applyResult(result) {
       state.activeModel = result.active_model;
+      state.metrics = result.metrics || {};
+      state.modelComparison = result.model_comparison || [];
       setText("#kpi-champion", result.active_model || "—");
       setText("#kpi-validation", result.validation ? result.validation.method : "Holdout validation");
       setText("#active-model-pill", result.active_model ? "Champion: " + result.active_model : "No active model");
@@ -808,24 +941,199 @@
       try { const response = await fetch("/api/health", { cache: "no-store" }); const data = await response.json(); const chip = q("#api-status"); chip.className = "pill live"; chip.textContent = data.trained ? "API online · " + data.active_model + " ready" : "API online · no model trained"; }
       catch (_) { const chip = q("#api-status"); chip.className = "pill"; chip.textContent = "API offline"; }
     }
-    async function restoreSavedModel() {
+
+    function toggleSavedRun() {
+      if (!state.savedModelData) {
+        toast("Saved model is still loading or not found on server.", "error");
+        return;
+      }
+      if (!state.savedRunVisible) {
+        applyResult(state.savedModelData);
+        applySavedSummary(state.savedModelData.training_summary);
+        showHighRisk(state.savedModelData.high_risk_employees, state.savedModelData.high_risk_threshold);
+        state.savedRunVisible = true;
+        setText("#btn-load-saved", "🔄 Hide Saved Run");
+        toast("Loaded saved 1,000,000-workforce model telemetry!", "success");
+      } else {
+        clearWorkspace();
+      }
+    }
+
+    function clearWorkspace() {
+      state.savedRunVisible = false;
+      setText("#kpi-rows", "—");
+      setText("#kpi-attrition", "—");
+      setText("#kpi-auc", "—");
+      setText("#kpi-source", "Ready for analysis");
+      setText("#btn-load-saved", "📂 Load Saved 1M Run");
+
+      const prevHead = q("#preview-head"), prevBody = q("#preview-body");
+      if (prevHead) prevHead.innerHTML = "<tr><th>Workspace Clean</th></tr>";
+      if (prevBody) prevBody.innerHTML = "<tr><td class='empty'>Clean workspace. Upload a new workforce CSV or click 'Load Saved 1M Run' above.</td></tr>";
+
+      const hrBody = q("#high-risk-body");
+      if (hrBody) hrBody.innerHTML = "<tr><td colspan='6' class='empty'>Click 'Load Saved 1M Run' above or upload a CSV to inspect at-risk employees.</td></tr>";
+      toast("Workspace reset to clean initial state.", "info");
+    }
+
+    async function initModelQuietly() {
       try { 
         const response = await fetch("/api/model-info", { cache: "no-store" }); 
         if (!response.ok) return; 
         const data = await response.json(); 
-        applyResult(data); 
-        applySavedSummary(data.training_summary); 
-        showHighRisk(data.high_risk_employees, data.high_risk_threshold); 
-        setText("#training-status", "Restored saved Kaizen model"); 
+        state.savedModelData = data;
+        state.activeModel = data.active_model;
+        state.modelComparison = data.model_comparison || [];
+        state.featureSchema = data.feature_schema || [];
+        
+        setText("#kpi-champion", data.active_model ? data.active_model + " (Ready)" : "—");
+        setText("#kpi-validation", "Saved 1M model ready");
+        setText("#active-model-pill", data.active_model ? "Champion: " + data.active_model : "No active model");
+        setText("#model-version", data.model_version ? "Model " + data.model_version : "No saved model");
+        buildProfileForm(data.feature_schema);
+        calculateSimulation();
       }
       catch (_) { /* the first-run state is intentionally quiet */ }
     }
+
+    async function uploadBatchAudit(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      state.lastBatchFile = file;
+      const form = new FormData();
+      form.append("file", file);
+      
+      setText("#audit-status", "Scoring " + file.name + " with " + (state.activeModel || "champion") + "…");
+      setText("#audit-speed", "Inference running…");
+
+      try {
+        const response = await fetch("/api/batch-predict", { method: "POST", body: form });
+        if (!response.ok) throw new Error(await errorMessage(response));
+        const data = await response.json();
+
+        setText("#audit-total", Number(data.total_employees).toLocaleString());
+        setText("#audit-critical", Number(data.summary.critical_risk_count).toLocaleString());
+        setText("#audit-elevated", Number(data.summary.medium_risk_count).toLocaleString());
+        setText("#audit-low", Number(data.summary.low_risk_count).toLocaleString());
+        setText("#audit-thresh", (data.decision_threshold * 100).toFixed(0) + "%");
+        setText("#audit-action-req", Number(data.summary.high_risk_count).toLocaleString() + " (" + data.summary.high_risk_percentage + "%)");
+        setText("#audit-speed", data.inference_seconds + "s (" + Number(data.records_per_second).toLocaleString() + " rec/s)");
+        setText("#audit-status", "Audited " + Number(data.total_employees).toLocaleString() + " records successfully");
+
+        const expBtn = q("#btn-export-audit");
+        if (expBtn) expBtn.disabled = false;
+
+        renderBatchHighRiskTable(data.top_high_risk_employees || []);
+        toast(`Audited ${Number(data.total_employees).toLocaleString()} employees in ${data.inference_seconds}s!`, "success");
+      } catch (error) {
+        toast(error.message, "error");
+        setText("#audit-status", "Batch scoring failed — check CSV formatting");
+      } finally {
+        event.target.value = "";
+      }
+    }
+
+    function renderBatchHighRiskTable(employees) {
+      const body = q("#batch-high-risk-body");
+      if (!body) return;
+      body.replaceChildren();
+      if (!employees || !employees.length) {
+        const row = document.createElement("tr");
+        const cell = createCell("No high-risk employees found above the operating threshold.");
+        cell.colSpan = 7;
+        cell.className = "empty";
+        row.appendChild(cell);
+        body.appendChild(row);
+        return;
+      }
+
+      employees.forEach((emp) => {
+        const row = document.createElement("tr");
+        row.appendChild(createCell(emp.id));
+        row.appendChild(createCell(emp.department || "—"));
+        row.appendChild(createCell(emp.job_role || "—"));
+        row.appendChild(createCell(emp.monthly_income ? "$" + Number(emp.monthly_income).toLocaleString() : "—"));
+        
+        const riskTd = document.createElement("td");
+        riskTd.className = "rose";
+        riskTd.style.fontWeight = "800";
+        riskTd.textContent = (emp.risk_score * 100).toFixed(1) + "%";
+        row.appendChild(riskTd);
+
+        const driversTd = document.createElement("td");
+        if (emp.drivers && emp.drivers.length) {
+          emp.drivers.forEach(d => {
+            const badge = document.createElement("span");
+            badge.className = "pill";
+            badge.style.marginRight = "4px";
+            badge.style.fontSize = "10px";
+            badge.textContent = d.feature + " (+" + Number(d.impact).toFixed(1) + ")";
+            driversTd.appendChild(badge);
+          });
+        } else {
+          driversTd.textContent = "General flight risk indicators";
+        }
+        row.appendChild(driversTd);
+
+        const actTd = document.createElement("td");
+        const simBtn = document.createElement("button");
+        simBtn.className = "button secondary";
+        simBtn.style.padding = "4px 9px";
+        simBtn.style.fontSize = "11px";
+        simBtn.textContent = "Simulate ➜";
+        simBtn.onclick = () => {
+          if (emp.profile) {
+            setView("simulator");
+            state.baselineRisk = null;
+            for (const [k, v] of Object.entries(emp.profile)) {
+              const el = q(`#field-${k}`);
+              if (el) el.value = v;
+            }
+            calculateSimulation();
+            toast(`Loaded ${emp.id} into simulator`, "success");
+          }
+        };
+        actTd.appendChild(simBtn);
+        row.appendChild(actTd);
+
+        body.appendChild(row);
+      });
+    }
+
+    async function exportBatchAuditCSV() {
+      if (!state.lastBatchFile) {
+        toast("No audited batch available to export. Upload a CSV first.", "error");
+        return;
+      }
+      const form = new FormData();
+      form.append("file", state.lastBatchFile);
+      toast("Generating enriched predictions CSV…", "info");
+      try {
+        const resp = await fetch("/api/batch-predict/export", { method: "POST", body: form });
+        if (!resp.ok) throw new Error(await errorMessage(resp));
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "scored_workforce_predictions.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast("Scored CSV downloaded successfully!", "success");
+      } catch (err) {
+        toast(err.message, "error");
+      }
+    }
+
     q("#dataset-input").addEventListener("change", uploadDataset);
+    const batchInp = q("#batch-input");
+    if (batchInp) batchInp.addEventListener("change", uploadBatchAudit);
     q("#load-demo").addEventListener("click", loadDemo);
     q("#profile-form").addEventListener("submit", predict);
     q("#profile-form").addEventListener("input", calculateSimulation);
     q("#profile-form").addEventListener("change", calculateSimulation);
-    ping(); restoreSavedModel(); window.setInterval(ping, 10000);
+    ping(); initModelQuietly(); window.setInterval(ping, 10000);
   </script>
 </body>
 </html>

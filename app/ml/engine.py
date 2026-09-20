@@ -570,6 +570,25 @@ class KaizenEngine:
             "decision_threshold": thresh,
         }
 
+    def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
+        """Vectorized batch risk probability prediction across an arbitrary DataFrame."""
+        if self.model is None or self.active_model is None:
+            raise RuntimeError("No model has been trained yet.")
+        expected = self.numeric_features + self.categorical_features
+        aligned_df = pd.DataFrame(index=df.index)
+        for col in self.numeric_features:
+            if col in df.columns:
+                aligned_df[col] = pd.to_numeric(df[col], errors="coerce")
+            else:
+                aligned_df[col] = np.nan
+        for col in self.categorical_features:
+            if col in df.columns:
+                aligned_df[col] = df[col].astype(str)
+            else:
+                aligned_df[col] = "Missing"
+        aligned_df = aligned_df[expected]
+        return self.model.predict_proba(aligned_df)[:, 1]
+
     def _local_drivers(
         self, profile: pd.DataFrame, current_risk: float
     ) -> list[dict[str, Any]]:

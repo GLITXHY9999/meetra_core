@@ -4,8 +4,13 @@
 __pycache__/
 *.pyc
 
-# Massive datasets exceeding GitHub's 100MB limit (can be regenerated with generate_1m_dataset.py)
+# Massive datasets exceeding GitHub's 100MB limit
 enterprise_workforce_1m.csv
+*1m*.csv
+*blind*.csv
+*ground_truth*.csv
+data/
+benchmark/
 
 # Pytest and Temporary storage
 .pytest_cache/

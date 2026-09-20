@@ -84,3 +84,46 @@ def test_upload_rejects_regression_mode(client):
 def test_model_info_requires_trained_model(client):
     response = client.get("/api/model-info")
     assert response.status_code == 409
+
+
+def test_batch_predict_and_export(client):
+    client.post("/api/load-demo")
+    csv_content = b"Age,Department,MonthlyIncome,OverTime,DistanceFromHome,JobSatisfaction,EmployeeNumber\n25,Sales,3000,Yes,15,2,EMP-1\n45,R&D,8000,No,5,4,EMP-2\n"
+    resp = client.post(
+        "/api/batch-predict",
+        files={"file": ("batch.csv", io.BytesIO(csv_content), "text/csv")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["total_employees"] == 2
+    assert len(data["top_high_risk_employees"]) == 2
+
+    export_resp = client.post(
+        "/api/batch-predict/export",
+        files={"file": ("batch.csv", io.BytesIO(csv_content), "text/csv")},
+    )
+    assert export_resp.status_code == 200
+    assert "Predicted_Attrition_Risk_Pct" in export_resp.text
+    assert "Risk_Category" in export_resp.text
+
+
+def test_evaluate_benchmark(client):
+    client.post("/api/load-demo")
+    blind_csv = b"Age,Department,MonthlyIncome,OverTime,DistanceFromHome,JobSatisfaction,EmployeeNumber\n25,Sales,3000,Yes,15,2,EMP-1\n45,R&D,8000,No,5,4,EMP-2\n"
+    truth_csv = b"EmployeeNumber,Attrition\nEMP-1,Yes\nEMP-2,No\n"
+
+    resp = client.post(
+        "/api/evaluate-benchmark",
+        files={
+            "blind_file": ("blind.csv", io.BytesIO(blind_csv), "text/csv"),
+            "truth_file": ("truth.csv", io.BytesIO(truth_csv), "text/csv"),
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["benchmark_sample_size"] == 2
+    assert "evaluation" in data
+    assert "accuracy" in data["evaluation"]
+    assert "confusion" in data["evaluation"]

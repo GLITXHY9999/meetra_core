@@ -13,6 +13,7 @@ import logging
 import threading
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from app.config import get_settings
@@ -56,6 +57,9 @@ class ModelService:
 
     def predict(self, payload: dict) -> dict:
         return self.engine.predict_detailed(payload)
+
+    def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
+        return self.engine.predict_batch(df)
 
     def record_high_risk_employees(
         self, engine: KaizenEngine, employees: list[dict]
