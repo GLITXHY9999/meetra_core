@@ -14,9 +14,12 @@ Designed for Fortune 500 scale, Meetra Core processes **1,000,000 workforce reco
 
 ## ⚡ One-Click Cloud Execution (Google Colab)
 
-Run the complete 1-Million benchmark, TreeSHAP attribution, and fairness auditor on a free cloud GPU (NVIDIA T4):
+* **Enterprise 1-Million Platform Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)  
+  Runs the full 1M employee benchmark, TreeSHAP explainability, and EEOC fairness audit on GPU.
 
-👉 [**Open in Google Colab**](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
+* **Experiment - 1.2: Exploratory Data Analysis (EDA):** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_2_EDA.ipynb)  
+  Interactive lab practical notebook with dataset summary statistics, correlation heatmaps, feature histograms, outlier boxplots, and written observations.  
+  👉 Full Lab Report: [`EDA_Experiment_1_2_Report.md`](EDA_Experiment_1_2_Report.md) | Visualizations: [`eda_insights/`](eda_insights/)
 
 ---
 
