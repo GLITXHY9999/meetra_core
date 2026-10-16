@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import (
@@ -42,6 +43,39 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.base import clone
 
 logger = logging.getLogger(__name__)
+
+
+# Protected characteristics are retained only for a post-hoc diagnostic on the
+# held-out data.  They are deliberately not model inputs or simulator fields.
+PROTECTED_ATTRIBUTE_NAMES = frozenset(
+    {
+        "age", "ageyears", "yearsold", "gender", "sex", "race", "ethnicity",
+        "maritalstatus", "marital", "civilstatus", "disability", "pregnancy",
+        "religion", "nationality", "citizenship",
+    }
+)
+
+
+def _normalise_column_name(name: object) -> str:
+    return "".join(char for char in str(name).lower() if char.isalnum())
+
+
+@dataclass
+class ProbabilityCalibratedModel:
+    """A fitted pipeline plus a Platt calibrator learned from OOF predictions.
+
+    Calibration is fitted from predictions made by models that did not see each
+    row.  This avoids the overly-confident probability scores common in tree
+    ensembles while preserving the fitted tree pipeline for exact TreeSHAP.
+    """
+
+    base_model: Pipeline
+    calibrator: LogisticRegression
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        raw = self.base_model.predict_proba(X)[:, 1]
+        calibrated = self.calibrator.predict_proba(raw.reshape(-1, 1))[:, 1]
+        return np.column_stack((1.0 - calibrated, calibrated))
 
 
 @lru_cache(maxsize=1)
@@ -114,7 +148,7 @@ class KaizenEngine:
     task_type: str = "classification"
 
     active_model: str | None = None
-    candidate_models: dict[str, Pipeline] = field(default_factory=dict)
+    candidate_models: dict[str, ProbabilityCalibratedModel] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
     model_comparison: list[dict[str, Any]] = field(default_factory=list)
     validation: dict[str, Any] = field(default_factory=dict)
@@ -123,12 +157,14 @@ class KaizenEngine:
 
     numeric_features: list[str] = field(default_factory=list)
     categorical_features: list[str] = field(default_factory=list)
+    excluded_protected_features: list[str] = field(default_factory=list)
     numeric_bounds: dict[str, dict[str, float]] = field(default_factory=dict)
     reference_profile: dict[str, Any] = field(default_factory=dict)
     feature_importances: list[dict[str, Any]] = field(default_factory=list)
     trained_at: str | None = None
     version: str | None = None
-    model: Pipeline | None = None
+    model: ProbabilityCalibratedModel | None = None
+
 
     # ------------------------------------------------------------------ #
     # Pipeline construction
@@ -152,7 +188,7 @@ class KaizenEngine:
             remainder="drop",
         )
 
-    def _build_estimator(self, model_name: str, n_samples: int = 1000):
+    def _build_estimator(self, model_name: str, n_samples: int = 1000, scale_pos_weight: float = 1.0):
         if model_name == "PorusXS":
             # Scale-adaptive subsampling: 60k-80k samples per tree at million-scale
             # guarantees maximum ensemble diversity with lightning-fast execution
@@ -199,9 +235,11 @@ class KaizenEngine:
                     grow_policy="lossguide",
                     tree_method="hist",
                     device=cuda_device,
-                    reg_lambda=0.5,
-                    subsample=0.85,
-                    colsample_bytree=0.85,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
+                    subsample=0.80,
+                    colsample_bytree=0.80,
+                    scale_pos_weight=scale_pos_weight,
                     eval_metric="logloss",
                     random_state=42,
                     verbosity=0,
@@ -232,11 +270,11 @@ class KaizenEngine:
                 )
         raise ValueError(f"Unknown candidate model: {model_name}")
 
-    def _build_pipeline(self, model_name: str, n_samples: int = 1000) -> Pipeline:
+    def _build_pipeline(self, model_name: str, n_samples: int = 1000, scale_pos_weight: float = 1.0) -> Pipeline:
         return Pipeline(
             steps=[
                 ("preprocess", self._build_preprocessor()),
-                ("estimator", self._build_estimator(model_name, n_samples=n_samples)),
+                ("estimator", self._build_estimator(model_name, n_samples=n_samples, scale_pos_weight=scale_pos_weight)),
             ]
         )
 
@@ -260,8 +298,8 @@ class KaizenEngine:
             acc = accuracy_score(y_true, preds)
             f1 = f1_score(y_true, preds, zero_division=0)
             bacc = balanced_accuracy_score(y_true, preds)
-            # Composite objective: rewards high raw accuracy while strictly guarding minority recall
-            score = 0.40 * acc + 0.35 * f1 + 0.25 * bacc
+            # Rebalanced objective: prioritize F1 and balanced accuracy to actively suppress False Negatives
+            score = 0.50 * f1 + 0.30 * bacc + 0.20 * acc
             if score > best_score:
                 best_score = score
                 best_threshold = t
@@ -289,13 +327,39 @@ class KaizenEngine:
         return self._optimal_threshold(y_train, probabilities)
 
     @staticmethod
+    def _oof_probabilities(
+        pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series
+    ) -> np.ndarray:
+        """Return strictly out-of-fold probabilities for calibration/cutoff work."""
+        from sklearn.model_selection import StratifiedKFold, cross_val_predict
+
+        folds = min(3, int(y_train.value_counts().min()))
+        if folds < 2:
+            raise TrainingError("At least two examples in each class are required for calibration.")
+        cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+        return cross_val_predict(
+            clone(pipeline), X_train, y_train, cv=cv, method="predict_proba", n_jobs=1
+        )[:, 1]
+
+    @staticmethod
+    def _fit_platt_calibrator(probabilities: np.ndarray, y_true: pd.Series) -> LogisticRegression:
+        """Fit a sigmoid probability map to out-of-fold probabilities only."""
+        calibrator = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+        calibrator.fit(np.asarray(probabilities).reshape(-1, 1), np.asarray(y_true, dtype=int))
+        return calibrator
+
+    @staticmethod
+    def _base_pipeline(model: ProbabilityCalibratedModel | Pipeline) -> Pipeline:
+        return model.base_model if isinstance(model, ProbabilityCalibratedModel) else model
+
+    @staticmethod
     def _audit_fairness(
         X_df: pd.DataFrame | None,
         y_true: np.ndarray,
         probabilities: np.ndarray,
         threshold: float,
     ) -> dict[str, Any] | None:
-        """Audit algorithmic fairness and EEOC disparate impact (Four-Fifths Rule)."""
+        """Return a diagnostic disparity screen; it is not a compliance certification."""
         if X_df is None or len(X_df) == 0:
             return None
 
@@ -348,7 +412,19 @@ class KaizenEngine:
 
         for attr_name, cohort_series in detected_cohorts:
             val_counts = cohort_series.value_counts()
-            valid_groups = [g for g, c in val_counts.items() if c >= 3 and str(g) not in {"nan", "None", ""}]
+            # Tiny subgroups make ratios unstable and can create a misleading
+            # PASS.  Require a minimally informative sample and both outcomes.
+            valid_groups = []
+            for g, count in val_counts.items():
+                mask = (cohort_series == g).to_numpy()
+                outcomes = y_true_arr[mask]
+                if (
+                    count >= 30
+                    and str(g) not in {"nan", "None", ""}
+                    and int(np.sum(outcomes == 1)) >= 5
+                    and int(np.sum(outcomes == 0)) >= 5
+                ):
+                    valid_groups.append(g)
             if len(valid_groups) < 2:
                 continue
 
@@ -403,7 +479,7 @@ class KaizenEngine:
                 passed = bool(air >= 0.80)
                 sg["four_fifths_passed"] = passed
                 if air >= 0.80:
-                    sg["status"] = "PASS"
+                    sg["status"] = "MONITOR"
                 elif air >= 0.70:
                     sg["status"] = "WARNING"
                 else:
@@ -418,7 +494,7 @@ class KaizenEngine:
             tpr_disp = round(float(max(all_tpr) - min(all_tpr)), 4)
             fpr_disp = round(float(max(all_fpr) - min(all_fpr)), 4)
 
-            attr_status = "PASS" if attr_four_fifths_passed else ("WARNING" if attr_air_min >= 0.70 else "VIOLATION")
+            attr_status = "MONITOR" if attr_four_fifths_passed else ("WARNING" if attr_air_min >= 0.70 else "VIOLATION")
 
             attribute_reports.append({
                 "attribute_name": attr_name,
@@ -452,7 +528,7 @@ class KaizenEngine:
             base_score = max(base_score, 85.0)
         fairness_score = round(float(np.clip(base_score, 0.0, 100.0)), 1)
 
-        overall_status = "PASS" if overall_compliant else ("WARNING" if fairness_score >= 70.0 else "VIOLATION")
+        overall_status = "MONITOR" if overall_compliant else ("WARNING" if fairness_score >= 70.0 else "VIOLATION")
 
         recs = []
         for r in attribute_reports:
@@ -465,13 +541,12 @@ class KaizenEngine:
             if r["fpr_disparity"] > 0.08:
                 recs.append(
                     f"Elevated False Positive Rate disparity ({r['fpr_disparity'] * 100:.1f}%) detected in '{r['attribute_name']}'. "
-                    "Calibrate probability thresholds per cohort to prevent disproportionate retention alerts."
+                    "Investigate data quality, proxy features, and the intervention process with an independent reviewer; do not set group-specific employment thresholds automatically."
                 )
 
         if not recs:
             recs.append(
-                "All evaluated demographic cohorts comply with the EEOC 80% Four-Fifths Rule (29 C.F.R. § 1607.4D). "
-                "Adverse impact ratios remain within standard regulatory tolerances."
+                "No material disparity was detected in this limited holdout diagnostic. This is not a legal compliance finding or an independent bias audit."
             )
 
         return {
@@ -484,6 +559,10 @@ class KaizenEngine:
             "predictive_equality_diff": round(float(max(fpr_disp_list)), 4) if fpr_disp_list else 0.0,
             "attributes": attribute_reports,
             "recommendations": recs,
+            "limitations": (
+                "Risk-alert rates are a monitoring metric, not an employment-selection decision. "
+                "Results require independent legal, statistical, and HR review before use."
+            ),
         }
 
     # ------------------------------------------------------------------ #
@@ -729,37 +808,55 @@ class KaizenEngine:
         if self.task_type != "classification":
             raise TrainingError("Kaizen supports binary attrition classification only.")
 
-        self.numeric_features = X.select_dtypes(include="number").columns.tolist()
-        self.categorical_features = X.select_dtypes(exclude="number").columns.tolist()
+        # Protected characteristics are kept for held-out fairness diagnostics,
+        # but intentionally excluded from the model and simulator input form.
+        audit_X = X.copy()
+        self.excluded_protected_features = [
+            col for col in X.columns if _normalise_column_name(col) in PROTECTED_ATTRIBUTE_NAMES
+        ]
+        model_X = X.drop(columns=self.excluded_protected_features, errors="ignore")
+        self.numeric_features = model_X.select_dtypes(include="number").columns.tolist()
+        self.categorical_features = model_X.select_dtypes(exclude="number").columns.tolist()
         if not self.numeric_features and not self.categorical_features:
-            raise TrainingError("No usable feature columns were found in the dataset.")
+            raise TrainingError("No usable non-protected feature columns were found in the dataset.")
         if y.nunique() != 2:
             raise TrainingError("Attrition must contain both stay (0) and leave (1) examples.")
 
         # Stratified holdout split (80/20)
         from sklearn.model_selection import train_test_split
 
-        X_train, X_holdout, y_train, y_holdout = train_test_split(
-            X,
+        train_positions, holdout_positions, _, _ = train_test_split(
+            np.arange(len(model_X)),
             y.astype(int),
             test_size=0.20,
             random_state=42,
             stratify=y.astype(int),
         )
+        X_train = model_X.iloc[train_positions]
+        X_holdout = model_X.iloc[holdout_positions]
+        y_train = y.iloc[train_positions]
+        y_holdout = y.iloc[holdout_positions]
+        audit_holdout = audit_X.iloc[holdout_positions]
 
         comparisons: list[dict[str, Any]] = []
-        candidate_pipelines: dict[str, Pipeline] = {}
+        candidate_pipelines: dict[str, ProbabilityCalibratedModel] = {}
         candidate_thresholds: dict[str, float] = {}
 
-        for name in ("PorusXS", "AlexzanderXS"):
-            logger.info("Training candidate %s on %d rows…", name, len(X_train))
-            pipe = self._build_pipeline(name, n_samples=len(X_train))
-            pipe.fit(X_train, y_train)
+        pos_count = int(y_train.sum())
+        neg_count = int(len(y_train) - pos_count)
+        scale_pos = float(np.clip(np.sqrt(neg_count / max(pos_count, 1)), 1.0, 4.0)) if pos_count > 0 else 1.0
 
+        for name in ("PorusXS", "AlexzanderXS"):
+            logger.info("Training candidate %s on %d rows (scale_pos=%.2f)…", name, len(X_train), scale_pos)
+            raw_pipe = self._build_pipeline(name, n_samples=len(X_train), scale_pos_weight=scale_pos)
+            oof_raw = self._oof_probabilities(raw_pipe, X_train, y_train)
+            calibrator = self._fit_platt_calibrator(oof_raw, y_train)
+            pipe = ProbabilityCalibratedModel(raw_pipe, calibrator)
+            raw_pipe.fit(X_train, y_train)
             # Move booster inference to CPU to maximize throughput and eliminate
             # thread-safety and CUDA context-switching issues during 1-row simulation.
             try:
-                est = pipe.named_steps["estimator"]
+                est = raw_pipe.named_steps["estimator"]
                 if hasattr(est, "set_params"):
                     est.set_params(device="cpu")
             except Exception:
@@ -768,7 +865,8 @@ class KaizenEngine:
             candidate_pipelines[name] = pipe
 
             probs = pipe.predict_proba(X_holdout)[:, 1]
-            opt_thresh = self._training_oof_threshold(pipe, X_train, y_train)
+            oof_calibrated = calibrator.predict_proba(oof_raw.reshape(-1, 1))[:, 1]
+            opt_thresh = self._optimal_threshold(y_train, oof_calibrated)
             candidate_thresholds[name] = opt_thresh
 
             dev_tag = "cuda" if name == "AlexzanderXS" and _detect_cuda_device() == "cuda" else "cpu"
@@ -778,7 +876,7 @@ class KaizenEngine:
                 name,
                 threshold=opt_thresh,
                 hardware_device=dev_tag,
-                X_df=X_holdout,
+                X_df=audit_holdout,
             )
             comparisons.append(metrics)
             logger.info(
@@ -806,35 +904,59 @@ class KaizenEngine:
         self.candidate_models = candidate_pipelines
 
         self.validation = {
-            "method": "stratified 80/20 holdout with 3-fold training-only threshold selection",
+            "method": "stratified 80/20 holdout with 3-fold out-of-fold calibration and training-only threshold selection",
             "training_rows": int(len(X_train)),
             "holdout_rows": int(len(X_holdout)),
             "positive_rate_pct": round(float(y.mean() * 100), 2),
             "selection_metric": "PR-AUC, then ROC-AUC and MCC",
             "note": (
                 "Both candidates were evaluated on identical unseen stratified records. "
-                "Their decision thresholds were selected using training-only out-of-fold "
-                "predictions; the champion was then refit on the full dataset."
+                "Their calibration maps and decision thresholds were selected using training-only "
+                "out-of-fold predictions; the champion was then refit on the full dataset. "
+                "A random holdout estimates within-dataset generalisation only; validate on a later time period before deployment."
             ),
         }
 
-        # Refit champion on all data for production deployment
+        # Refit the champion on all data.  The production calibration map is
+        # again trained only on out-of-fold predictions, never on in-sample scores.
         logger.info(
             "Champion: %s | Refitting on full dataset (%d rows)…",
             self.active_model,
-            len(X),
+            len(model_X),
         )
-        self.model = self._build_pipeline(self.active_model, n_samples=len(X))
-        self.model.fit(X, y.astype(int))
+        full_pos_count = int(y.sum())
+        full_neg_count = int(len(y) - full_pos_count)
+        full_scale_pos = float(np.clip(np.sqrt(full_neg_count / max(full_pos_count, 1)), 1.0, 4.0)) if full_pos_count > 0 else 1.0
+
+        final_raw_model = self._build_pipeline(self.active_model, n_samples=len(model_X), scale_pos_weight=full_scale_pos)
+        full_oof_raw = self._oof_probabilities(final_raw_model, model_X, y.astype(int))
+        final_calibrator = self._fit_platt_calibrator(full_oof_raw, y.astype(int))
+        final_raw_model.fit(model_X, y.astype(int))
+        self.model = ProbabilityCalibratedModel(final_raw_model, final_calibrator)
         try:
-            est = self.model.named_steps["estimator"]
+            est = final_raw_model.named_steps["estimator"]
             if hasattr(est, "set_params"):
                 est.set_params(device="cpu")
         except Exception:
             pass
 
-        self.reference_profile, self.numeric_bounds = self._build_reference_and_bounds(X)
-        self.feature_importances = self._calculate_feature_importances(X, y.astype(int))
+        # Refit challenger model on full data so candidate_models has both calibrated models ready for blended ensemble inference
+        challenger_name = "PorusXS" if self.active_model == "AlexzanderXS" else "AlexzanderXS"
+        challenger_raw = self._build_pipeline(challenger_name, n_samples=len(model_X), scale_pos_weight=full_scale_pos)
+        challenger_oof = self._oof_probabilities(challenger_raw, model_X, y.astype(int))
+        challenger_cal = self._fit_platt_calibrator(challenger_oof, y.astype(int))
+        challenger_raw.fit(model_X, y.astype(int))
+        try:
+            est_c = challenger_raw.named_steps["estimator"]
+            if hasattr(est_c, "set_params"):
+                est_c.set_params(device="cpu")
+        except Exception:
+            pass
+        self.candidate_models[self.active_model] = self.model
+        self.candidate_models[challenger_name] = ProbabilityCalibratedModel(challenger_raw, challenger_cal)
+
+        self.reference_profile, self.numeric_bounds = self._build_reference_and_bounds(model_X)
+        self.feature_importances = self._calculate_feature_importances(model_X, y.astype(int))
         self.trained_at = datetime.now(timezone.utc).isoformat()
         self.version = uuid.uuid4().hex[:12]
         logger.info(
@@ -891,7 +1013,8 @@ class KaizenEngine:
             choices: list[str] = []
             if self.model is not None:
                 try:
-                    preprocessor: ColumnTransformer = self.model.named_steps["preprocess"]
+                    pipeline = self._base_pipeline(self.model)
+                    preprocessor: ColumnTransformer = pipeline.named_steps["preprocess"]
                     encoder: OneHotEncoder = preprocessor.named_transformers_["cat"].named_steps[
                         "onehot"
                     ]
@@ -921,7 +1044,8 @@ class KaizenEngine:
         """Calculate global feature importance for the champion model."""
         if self.model is None:
             return []
-        estimator = self.model.named_steps["estimator"]
+        pipeline = self._base_pipeline(self.model)
+        estimator = pipeline.named_steps["estimator"]
         importances = getattr(estimator, "feature_importances_", None)
         all_features = self.numeric_features + self.categorical_features
 
@@ -933,7 +1057,7 @@ class KaizenEngine:
                 y_sample = y.iloc[:sample_size]
                 try:
                     perm = permutation_importance(
-                        self.model,
+                        pipeline,
                         X_sample,
                         y_sample,
                         n_repeats=3,
@@ -961,7 +1085,7 @@ class KaizenEngine:
                 for col in all_features[:10]
             ]
 
-        preprocessor: ColumnTransformer = self.model.named_steps["preprocess"]
+        preprocessor: ColumnTransformer = pipeline.named_steps["preprocess"]
         encoded_names = preprocessor.get_feature_names_out()
         aggregated: dict[str, float] = {col: 0.0 for col in all_features}
         for encoded_name, importance in zip(encoded_names, importances):
@@ -1183,9 +1307,6 @@ class KaizenEngine:
         prescriptions = [_prescription_for(driver["raw_feature"], driver.get("impact", 0.0)) for driver in drivers]
         thresh = getattr(self, "decision_threshold", 0.5)
 
-        # Evaluate Team Churn Contagion dynamics
-        contagion = self._detect_team_contagion(input_dict, risk_score)
-
         return {
             "risk_score": risk_score,
             "drivers": [
@@ -1202,10 +1323,13 @@ class KaizenEngine:
             "model_name": self.active_model,
             "decision_threshold": thresh,
             "shap_base_value": shap_base_val,
-            "team_contagion": contagion,
+            # A real contagion estimate needs network/manager-event data and a
+            # separately validated causal design.  Do not fabricate one from a
+            # single employee profile.
+            "team_contagion": None,
         }
 
-    def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
+    def predict_batch(self, df: pd.DataFrame, blend_ensemble: bool = False) -> np.ndarray:
         """Vectorized batch risk probability prediction across an arbitrary DataFrame."""
         if self.model is None or self.active_model is None:
             raise RuntimeError("No model has been trained yet.")
@@ -1222,6 +1346,12 @@ class KaizenEngine:
             else:
                 aligned_df[col] = "Missing"
         aligned_df = aligned_df[expected]
+
+        if blend_ensemble and "AlexzanderXS" in self.candidate_models and "PorusXS" in self.candidate_models:
+            p_alex = self.candidate_models["AlexzanderXS"].predict_proba(aligned_df)[:, 1]
+            p_porus = self.candidate_models["PorusXS"].predict_proba(aligned_df)[:, 1]
+            return 0.70 * p_alex + 0.30 * p_porus
+
         return self.model.predict_proba(aligned_df)[:, 1]
 
     def _explain_profile(
@@ -1236,8 +1366,9 @@ class KaizenEngine:
 
         # 1. Native C++ TreeSHAP attribution for XGBoost estimators
         try:
-            preprocessor = self.model.named_steps.get("preprocess")
-            estimator = self.model.named_steps.get("estimator")
+            pipeline = self._base_pipeline(self.model)
+            preprocessor = pipeline.named_steps.get("preprocess")
+            estimator = pipeline.named_steps.get("estimator")
             if (
                 preprocessor is not None
                 and estimator is not None
@@ -1378,6 +1509,8 @@ class KaizenEngine:
             loaded.numeric_bounds = {}
         if not hasattr(loaded, "decision_threshold") or loaded.decision_threshold is None:
             loaded.decision_threshold = 0.5
+        if not hasattr(loaded, "excluded_protected_features") or loaded.excluded_protected_features is None:
+            loaded.excluded_protected_features = []
         logger.info(
             "Loaded Kaizen engine from %s (version=%s, champion=%s)",
             target,

@@ -63,8 +63,9 @@ def test_load_demo_trains_both_candidates_and_predicts(client):
 
 def test_predict_rejects_non_finite_numeric_values(client):
     result = client.post("/api/load-demo").json()["result"]
+    numeric_name = next(item["name"] for item in result["feature_schema"] if item["kind"] == "number")
     profile = {item["name"]: item["default"] for item in result["feature_schema"]}
-    profile["Age"] = "Infinity"
+    profile[numeric_name] = "Infinity"
 
     response = client.post("/api/predict", json=profile)
     assert response.status_code == 422

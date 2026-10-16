@@ -17,6 +17,7 @@ benchmark/
 storage/tmp/
 scratch/
 
-# Local configuration and logs
+# Local configuration, executables and logs
 *.log
+*.exe
 .env

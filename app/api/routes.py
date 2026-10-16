@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -11,7 +12,7 @@ import pandas as pd
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 
-from app.config import Settings, get_settings
+from app.config import BASE_DIR, Settings, get_settings
 from app.ml.engine import KaizenEngine, MODEL_DETAILS, TrainingError
 from app.schemas import HealthResponse, PredictResponse, TrainResponse
 from app.services.data_pipeline import prepare_training_data
@@ -388,7 +389,6 @@ async def batch_predict(
         contagion = None
         try:
             drivers = engine._local_drivers(engine._aligned_profile(profile), p_val)
-            contagion = engine._detect_team_contagion(profile, p_val)
         except Exception:
             pass
 
@@ -420,6 +420,122 @@ async def batch_predict(
         },
         "top_high_risk_employees": top_employees,
     })
+
+
+@router.post("/scan-sample-workforce")
+async def scan_sample_workforce(
+    settings: Settings = Depends(get_settings),
+    service: ModelService = Depends(get_model_service),
+) -> dict[str, Any]:
+    """Score the built-in 1,000-employee sample workforce (blind dataset) using the production champion model."""
+    if not service.is_trained:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No model has been trained yet.",
+        )
+    sample_csv = BASE_DIR / "data" / "test_workforce_blind.csv"
+    if not sample_csv.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample workforce file not found on server.",
+        )
+    raw_df = pd.read_csv(sample_csv)
+    engine = service.engine
+
+    t0 = time.perf_counter()
+    probs = await run_in_threadpool(engine.predict_batch, raw_df)
+    inference_seconds = round(time.perf_counter() - t0, 3)
+
+    total = len(raw_df)
+    thresh = float(engine.decision_threshold)
+    high_risk_mask = probs >= thresh
+    high_risk_count = int(np.sum(high_risk_mask))
+    high_risk_pct = round(high_risk_count / total * 100, 1) if total > 0 else 0.0
+
+    low_count = int(np.sum(probs < 0.40))
+    med_count = int(np.sum((probs >= 0.40) & (probs < 0.70)))
+    crit_count = int(np.sum(probs >= 0.70))
+
+    top_indices = np.argsort(probs)[::-1][:HIGH_RISK_LIMIT]
+    top_employees = []
+    for idx in top_indices:
+        row = raw_df.iloc[idx]
+        p_val = float(probs[idx])
+        profile = {
+            col: row[col]
+            for col in engine.numeric_features + engine.categorical_features
+            if col in row.index and pd.notna(row[col])
+        }
+        drivers = []
+        contagion = None
+        try:
+            drivers = engine._local_drivers(engine._aligned_profile(profile), p_val)
+        except Exception:
+            pass
+
+        top_employees.append(_sanitize_for_json({
+            "id": _employee_identifier(row, idx),
+            "risk_score": p_val,
+            "risk_percentage": round(p_val * 100, 1),
+            "department": _display_value(row, "Department"),
+            "job_role": _display_value(row, "JobRole"),
+            "monthly_income": row.get("MonthlyIncome", "N/A"),
+            "drivers": drivers[:4],
+            "profile": profile,
+            "team_contagion": contagion,
+        }))
+
+    return _sanitize_for_json({
+        "status": "success",
+        "total_employees": total,
+        "active_model": engine.active_model,
+        "decision_threshold": thresh,
+        "inference_seconds": inference_seconds,
+        "records_per_second": round(total / inference_seconds) if inference_seconds > 0 else total,
+        "summary": {
+            "high_risk_count": high_risk_count,
+            "high_risk_percentage": high_risk_pct,
+            "low_risk_count": low_count,
+            "medium_risk_count": med_count,
+            "critical_risk_count": crit_count,
+        },
+        "top_high_risk_employees": top_employees,
+    })
+
+
+@router.get("/scan-sample-workforce/export")
+async def scan_sample_workforce_export(
+    settings: Settings = Depends(get_settings),
+    service: ModelService = Depends(get_model_service),
+):
+    """Export scored predictions for the sample 1,000-employee workforce as CSV."""
+    if not service.is_trained:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No model has been trained yet.",
+        )
+    sample_csv = BASE_DIR / "data" / "test_workforce_blind.csv"
+    if not sample_csv.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample workforce file not found on server.",
+        )
+    raw_df = pd.read_csv(sample_csv)
+    engine = service.engine
+    probs = await run_in_threadpool(engine.predict_batch, raw_df)
+
+    thresh = float(engine.decision_threshold)
+    export_df = raw_df.copy()
+    export_df["Predicted_Attrition_Risk_Pct"] = np.round(probs * 100, 2)
+    export_df["Risk_Category"] = np.where(probs >= 0.70, "Critical", np.where(probs >= 0.40, "Elevated", "Low"))
+    export_df["Retention_Action_Required"] = np.where(probs >= thresh, "YES", "NO")
+
+    csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="sample_workforce_scored_retention_plan.csv"'},
+    )
 
 
 @router.post("/batch-predict/export")

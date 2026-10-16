@@ -1,5 +1,11 @@
 # Meetra Core / Kaizen: Master Architecture & Engineering Roadmap
 
+> **Evidence correction:** historical benchmark numbers in this file are based
+> on synthetic data generated in this repository. They are retained as an
+> engineering record, not as a real-workforce claim. The saved model is not to
+> be presented as production until it is retrained and externally validated
+> under the data-governance requirements in `docs/DATA_GOVERNANCE.md`.
+
 ## 1. Project Overview & Current State
 Meetra Core (Kaizen v3.0.0) is an enterprise-grade automated machine learning (AutoML) and workforce retention risk scoring platform.
 

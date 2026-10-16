@@ -131,10 +131,9 @@ def test_treeshap_explainability_and_additivity():
     assert first_driver["direction"] in {"risk_increasing", "protective", "baseline"}
 
     assert "team_contagion" in result
-    assert result["team_contagion"] is not None
-    assert "contagion_risk_level" in result["team_contagion"]
-    assert "contagion_multiplier" in result["team_contagion"]
-    assert "contagion_adjusted_risk" in result["team_contagion"]
+    # A single profile cannot evidence peer-network contagion.  The public
+    # prediction contract intentionally withholds that unvalidated heuristic.
+    assert result["team_contagion"] is None
 
 
 def test_team_churn_contagion_detector():

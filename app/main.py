@@ -51,11 +51,11 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # CORS — explicit allow-list from configuration, never a bare "*"
-    # combined with allow_credentials=True.
+    # CORS — explicit allow-list from configuration and Cloudflare tunnels
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins_list,
+        allow_origin_regex=r"https://.*\.trycloudflare\.com",
         allow_credentials=True,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],

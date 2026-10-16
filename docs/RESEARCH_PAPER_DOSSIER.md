@@ -1,3 +1,12 @@
+# Archived demonstration dossier — not a real-workforce validation report
+
+> **Status (2026-09-21): superseded as an evidence document.** The metrics and
+> throughput below were produced from repository-generated synthetic data and
+> must not be cited as real employee performance, calibration, fairness, ROI,
+> or legal-compliance evidence. The former contagion component was a hand-coded
+> heuristic and is not exposed by the prediction API. See `DATA_GOVERNANCE.md`
+> for the conditions required before a research or deployment claim can be made.
+
 # Master Research Paper Dossier: High-Throughput, Calibrated, and Fair Algorithmic Workforce Intelligence
 
 **Document Identifier**: `DOSSIER-MEETRA-2026-V1`  
