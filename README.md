@@ -21,6 +21,11 @@ Designed for enterprise scale, Meetra Core processes millions of workforce recor
   Interactive lab practical notebook with dataset summary statistics, correlation heatmaps, feature histograms, outlier boxplots, and written observations.  
   👉 Full Lab Report: [`EDA_Experiment_1_2_Report.md`](EDA_Experiment_1_2_Report.md) | Visualizations: [`eda_insights/`](eda_insights/)
 
+* **Experiment - 1.4: Classification Model Comparison:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_4_Classification.ipynb)  
+  Comparative benchmarking of 13 supervised classification algorithms with 10-fold stratified cross-validation, comprehensive evaluation metrics, ROC curves, and clinical metric analysis on the Cleveland Heart Disease dataset.  
+  👉 Full Lab Report: [Classification_Experiment_1_4_Report.md](Classification_Experiment_1_4_Report.md) | Visualizations: [classification_insights/](classification_insights/)
+
+
 ---
 
 ## 🏆 Key Capabilities & Innovations
