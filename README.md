@@ -10,7 +10,6 @@
 > ### 🎓 Official Academic Course Dossier & Laboratory Submission
 > - **Unified Google Colab Master Notebook**: [meetra_core_colab.ipynb](https://github.com/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb) — *Runs 100% inside Google Colab, covering Experiments 1.1–1.4, baseline evaluations (=43, TN=22, FP=6, FN=7, TP=8$), 10-fold CV leaderboard, and Capstone tournament.*
 > - **Official Final Project Report (PDF)**: [Kaizen_Final_Project_Report.pdf](https://github.com/GLITXHY9999/meetra_core/blob/main/Kaizen_Final_Project_Report.pdf) — *Complete, unabridged 32-page report fully synchronized with the Colab EDA and validation figures.*
-> - **Official Final Project Report (Word Document)**: [Kaizen_Final_Project_Report.docx](https://github.com/GLITXHY9999/meetra_core/blob/main/Kaizen_Final_Project_Report.docx) — *Editable Microsoft Word format compliant with university guidelines.*
 
 Meetra Core (Kaizen v3.1) is a high-throughput, calibrated machine-learning decision-support platform for **proactive employee attrition analysis, flight-risk prediction, algorithmic disparity auditing, and retention intelligence**.
 
