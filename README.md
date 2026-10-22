@@ -12,18 +12,15 @@ Designed for enterprise scale, Meetra Core processes millions of workforce recor
 
 ---
 
-## ⚡ One-Click Cloud Execution (Google Colab & Lab Reports)
+## ⚡ One-Click Cloud Execution (Google Colab Master Notebook)
 
-* **Enterprise Platform Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)  
-  Runs the full employee benchmark, TreeSHAP explainability, and disparity screen on GPU.
-
-* **Experiment - 1.2: Exploratory Data Analysis (EDA):** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_2_EDA.ipynb)  
-  Interactive lab practical notebook with dataset summary statistics, correlation heatmaps, feature histograms, outlier boxplots, and written observations.  
-  👉 Full Lab Report: [`EDA_Experiment_1_2_Report.md`](EDA_Experiment_1_2_Report.md) | Visualizations: [`eda_insights/`](eda_insights/)
-
-* **Experiment - 1.4: Classification Model Comparison:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_4_Classification.ipynb)  
-  Comparative benchmarking of 13 supervised classification algorithms with 10-fold stratified cross-validation, comprehensive evaluation metrics, ROC curves, and clinical metric analysis on the Cleveland Heart Disease dataset.  
-  👉 Full Lab Report: [Classification_Experiment_1_4_Report.md](Classification_Experiment_1_4_Report.md) | Visualizations: [classification_insights/](classification_insights/)
+* **Official Unified Master Laboratory Notebook (Exp 1.1 — 1.4 & Capstone):** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)  
+  A single, end-to-end, self-contained Google Colab dossier unifying the complete semester curriculum for **AI Applications Lab (`26ECP-102`)**:
+  * **Experiment 1.1:** Data Pre-processing, NumPy arrays, Pandas DataFrames & multi-panel Matplotlib charts.
+  * **Experiment 1.2:** Exploratory Data Analysis (EDA) on `employee_data.csv` with mandatory visualizations and Pearson correlation heatmaps.
+  * **Experiment 1.3:** Supervised learning foundations, stratified 80:20 train-test splitting, and full computation of all 7 classification performance metrics.
+  * **Experiment 1.4:** Multi-model classification tournament comparing 13 diverse algorithms under 10-Fold Stratified Cross-Validation.
+  * **Capstone Production Engine:** PorusXS vs. AlexzanderXS dual-tournament showdown, OOF threshold tuning ($	au^* = 0.25$), Murphy Brier calibration, 1-million employee GPU benchmark, TreeSHAP game theory, Title VII EEOC 80% four-fifths fairness audit, and an interactive in-notebook Gradio dashboard!
 
 
 ---
