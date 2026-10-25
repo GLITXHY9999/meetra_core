@@ -6,7 +6,7 @@
 **Dataset:** Real-World Employee Retention & Flight-Risk Analytics Dataset (`employee_data.csv`)  
 **Records Analyzed:** 215 Corporate Personnel Records | **Features:** 32 Attributes | **Target:** Binary Attrition (`Yes` = Flight Risk, `No` = Retained)  
 **GitHub Public Source:** [GLITXHY9999/meetra_core/employee_data.csv](https://github.com/GLITXHY9999/meetra_core/blob/main/employee_data.csv)  
-**Colab Interactive Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_4_Classification.ipynb)
+**Colab Interactive Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
 
 ---
 
@@ -158,7 +158,7 @@ The final sorted performance comparison across all 13 algorithms evaluated via 1
 ## 8. Interactive Execution Link
 
 The complete notebook is fully runnable on Google Colab with one click:  
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_4_Classification.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
 
 ---
 *Report formatted strictly to university laboratory practical standards.*

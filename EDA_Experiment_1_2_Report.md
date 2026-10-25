@@ -6,7 +6,7 @@
 **Dataset:** Real-World Employee Workforce & Retention Analytics Dataset (`employee_data.csv`)  
 **Records Analyzed:** 215 Employees | **Features:** 32 Attributes  
 **GitHub Public Source:** [GLITXHY9999/meetra_core/employee_data.csv](https://github.com/GLITXHY9999/meetra_core/blob/main/employee_data.csv)  
-**Colab Interactive Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_2_EDA.ipynb)
+**Colab Interactive Runner:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
 
 ---
 
@@ -138,7 +138,7 @@ plt.show()
 1. **Data Integrity:** The dataset contains zero missing values across 33 parameters, permitting robust analytical conclusions without synthetic imputation.
 2. **Dominant Relationships:** Total career tenure and job level are the strongest determinants of employee earnings ($r = 0.80$).
 3. **Turnover Vulnerabilities:** Long commute distances (>25 miles) and chronic overtime demands represent the two most prominent external stressors linked with workforce flight risk.
-4. **Interactive Notebook:** The full interactive pipeline can be run directly in Google Colab via [Experiment_1_2_EDA.ipynb](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/Experiment_1_2_EDA.ipynb).
+4. **Interactive Notebook:** The full interactive pipeline can be run directly in Google Colab via [meetra_core_colab.ipynb](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb).
 
 ---
 *Report automatically synthesized and verified against the meetra_core analytics engine on October 09, 2026.*
