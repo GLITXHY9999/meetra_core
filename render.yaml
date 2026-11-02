@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: meetra-core
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true

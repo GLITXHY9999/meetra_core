@@ -1,7 +1,24 @@
+---
+title: Kaizen Enterprise Workforce Platform
+emoji: 🏢
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # Meetra Core (Kaizen v3.1) — Enterprise Workforce Retention Platform
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?logo=python)](https://www.python.org/)
+[![Live 24/7 Web App](https://img.shields.io/badge/Live%20Website-GitHub%20Pages%20(24%2F7)-2ea44f?style=for-the-badge&logo=github)](https://glitxhy9999.github.io/meetra_core/)
+[![Open In Colab](https://img.shields.io/badge/Colab-Run%20Master%20Lab-orange?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/github/GLITXHY9999/meetra_core/blob/main/meetra_core_colab.ipynb)
+[![Deploy to Render](https://img.shields.io/badge/Deploy-Render-46E3B7?style=for-the-badge&logo=render)](https://render.com/deploy?repo=https://github.com/GLITXHY9999/meetra_core)
+
+> ### 🌐 24/7 Permanent Web Application (Always Online for Reviewers)
+> * **Live Permanent URL:** 👉 **[https://glitxhy9999.github.io/meetra_core/](https://glitxhy9999.github.io/meetra_core/)**  
+>   *Works 24/7 from any device/browser without requiring Google Colab or local Python servers to be running. Fully interactive with the real-time ML flight risk simulator, Figure 4.1 EDA visual models, 13-Model Tournament Leaderboard, and Title VII disparity audit.*
+> * **1-Click Cloud Server Deploy (Render):** Click the **Deploy to Render** badge above to launch a dedicated 24/7 FastAPI backend.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Disparity Diagnostic](https://img.shields.io/badge/EEOC%20Title%20VII-Disparity%20Diagnostic-brightgreen)](https://www.eeoc.gov/)
 [![Project Report PDF](https://img.shields.io/badge/Project%20Report-32--Page%20PDF-red?logo=adobe-acrobat-reader)](https://github.com/GLITXHY9999/meetra_core/blob/main/Kaizen_Final_Project_Report.pdf)
