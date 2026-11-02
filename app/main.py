@@ -51,13 +51,13 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # CORS — explicit allow-list from configuration and Cloudflare tunnels
+    # CORS — explicit allow-list from configuration and tunnels (Cloudflare, Localtunnel, Gradio, Ngrok)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins_list,
-        allow_origin_regex=r"https://.*\.trycloudflare\.com",
+        allow_origin_regex=r"https://.*(\.(trycloudflare\.com|loca\.lt|gradio\.live|ngrok-free\.app|ngrok\.io))",
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -65,6 +65,15 @@ def create_app() -> FastAPI:
 
     if STATIC_DIR.exists():
         app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+
+    from app.config import BASE_DIR
+    eda_dir = BASE_DIR / "eda_insights"
+    if eda_dir.exists():
+        app.mount("/eda_insights", StaticFiles(directory=eda_dir), name="eda_insights")
+
+    class_dir = BASE_DIR / "classification_insights"
+    if class_dir.exists():
+        app.mount("/classification_insights", StaticFiles(directory=class_dir), name="classification_insights")
 
     @app.get("/", include_in_schema=False)
     @app.get("/dashboard", include_in_schema=False)
