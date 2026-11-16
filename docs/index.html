@@ -599,41 +599,22 @@
           </div>
           <div class="grid split" style="margin-top:18px">
             <article class="card">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:9px 12px;border:1px solid #355071;border-radius:9px;background:rgba(255,255,255,.02)">
-                <span class="eyebrow" style="color:var(--cyan)">⚡ Quick-Load Employee:</span>
-                <select id="preset-selector" style="padding:6px 10px;border-radius:8px;border:1px solid #355071;background:#09172a;color:#eef7ff;font-size:12px;max-width:320px">
-                  <option value="default">Typical Workforce Baseline</option>
-                </select>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:9px 12px;border:1px solid #355071;border-radius:9px;background:rgba(255,255,255,.02);gap:10px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="eyebrow" style="color:var(--cyan);white-space:nowrap">⚡ Quick-Load Employee:</span>
+                  <select id="preset-selector" style="padding:6px 10px;border-radius:8px;border:1px solid #355071;background:#09172a;color:#eef7ff;font-size:12px;max-width:280px">
+                    <option value="default">Default Employee Profile</option>
+                  </select>
+                </div>
+                <div>
+                  <button type="button" class="button secondary" style="padding:5px 10px;font-size:11px" onclick="resetSimulatorToDefaults()">↺ Reset Form</button>
+                </div>
               </div>
               <h3>Employee profile</h3>
               <p id="form-caption">Train a CSV to generate a matching form.</p>
               <form id="profile-form"><div class="form-grid" id="profile-fields"></div><button class="button" style="width:100%;margin-top:17px" type="submit">Calculate attrition risk</button></form>
             </article>
             <div class="grid" style="gap:16px">
-              <article class="card diff-card" id="counter-offer-card">
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                  <div>
-                    <h3 style="color:var(--cyan)">⚡ Counter-Offer Impact (What-If Delta)</h3>
-                    <p>Real-time impact of simulated adjustments against baseline profile.</p>
-                  </div>
-                  <span class="pill" id="diff-status-pill">Awaiting baseline</span>
-                </div>
-                <div class="diff-grid">
-                  <div class="diff-box">
-                    <span class="diff-label">Baseline Risk</span>
-                    <b class="diff-val" id="baseline-risk-val">—</b>
-                  </div>
-                  <div class="diff-arrow">➜</div>
-                  <div class="diff-box">
-                    <span class="diff-label">Simulated Risk</span>
-                    <b class="diff-val" id="simulated-risk-val">—</b>
-                  </div>
-                  <div class="diff-delta" id="diff-delta-box">
-                    <span class="diff-label">Net Flight Risk Change</span>
-                    <b class="diff-delta-val" id="diff-delta-val">0.0 pts</b>
-                  </div>
-                </div>
-              </article>
               <article class="card risk-box">
                 <div class="eyebrow">Predicted probability of leaving</div>
                 <div class="risk-number" id="risk-number">—</div>
@@ -1082,8 +1063,7 @@
       featureSchema: [],
       activeModel: null,
       highRiskEmployees: [],
-      baselineRisk: null,
-      decisionThreshold: 0.5,
+            decisionThreshold: 0.5,
       modelComparison: [],
       savedModelData: null,
       savedRunVisible: false,
@@ -2012,7 +1992,7 @@
       select.replaceChildren();
       const defOpt = document.createElement("option");
       defOpt.value = "default";
-      defOpt.textContent = "Typical Workforce Baseline (Median/Mode)";
+      defOpt.textContent = "Default Employee Profile";
       select.appendChild(defOpt);
 
       (employees || []).forEach((emp) => {
@@ -2032,20 +2012,21 @@
     }
 
     function resetSimulatorToDefaults() {
-      state.baselineRisk = null;
       (state.featureSchema || []).forEach(f => {
         const el = q(`#field-${f.name}`);
         if (el) el.value = f.default;
       });
+      const select = q("#preset-selector");
+      if (select) select.value = "default";
       calculateSimulation();
+      toast("Reset simulator to default employee profile", "info");
     }
 
     function loadEmployeeToSimulator(empId) {
       const emp = (state.highRiskEmployees || []).find(e => e.id === empId);
       if (!emp) return;
       setView("simulator");
-      state.baselineRisk = null;
-      if (emp.profile) {
+            if (emp.profile) {
         for (const [key, val] of Object.entries(emp.profile)) {
           const el = q(`#field-${key}`);
           if (el) el.value = val;
@@ -2112,48 +2093,6 @@
       const risk = q("#risk-number"); risk.textContent = data.risk_percentage.toFixed(1) + "%"; risk.className = "risk-number " + color;
       setText("#risk-status", label); setText("#prediction-model", "Evaluated by " + data.model_name + " · decision threshold " + (data.decision_threshold * 100).toFixed(0) + "%");
 
-      // Before vs. After Counter-Offer Diff Card logic
-      if (state.baselineRisk === null) {
-        state.baselineRisk = data.risk_score;
-        setText("#baseline-risk-val", (data.risk_score * 100).toFixed(1) + "%");
-        setText("#simulated-risk-val", (data.risk_score * 100).toFixed(1) + "%");
-        setText("#diff-delta-val", "0.0 pts (Baseline)");
-        q("#diff-delta-val").style.color = "var(--muted)";
-        q("#diff-delta-box").style.background = "rgba(255,255,255,.02)";
-        q("#diff-delta-box").style.borderColor = "var(--line)";
-        setText("#diff-status-pill", "Baseline Set");
-        q("#diff-status-pill").className = "pill";
-      } else {
-        const delta = (data.risk_score - state.baselineRisk) * 100;
-        setText("#baseline-risk-val", (state.baselineRisk * 100).toFixed(1) + "%");
-        setText("#simulated-risk-val", (data.risk_score * 100).toFixed(1) + "%");
-        const deltaBox = q("#diff-delta-box");
-        const deltaVal = q("#diff-delta-val");
-        const statusPill = q("#diff-status-pill");
-
-        if (delta <= -0.5) {
-          deltaVal.textContent = "▼ " + Math.abs(delta).toFixed(1) + " pts Risk Reduced";
-          deltaVal.style.color = "var(--green)";
-          deltaBox.style.background = "rgba(52,211,153,.1)";
-          deltaBox.style.borderColor = "rgba(52,211,153,.4)";
-          statusPill.textContent = "Counter-Offer Effective";
-          statusPill.className = "pill live";
-        } else if (delta >= 0.5) {
-          deltaVal.textContent = "▲ +" + delta.toFixed(1) + " pts Risk Increased";
-          deltaVal.style.color = "var(--rose)";
-          deltaBox.style.background = "rgba(251,113,133,.1)";
-          deltaBox.style.borderColor = "rgba(251,113,133,.4)";
-          statusPill.textContent = "Elevated Flight Risk";
-          statusPill.className = "pill";
-        } else {
-          deltaVal.textContent = "Balanced (~0 pts)";
-          deltaVal.style.color = "var(--muted)";
-          deltaBox.style.background = "rgba(255,255,255,.02)";
-          deltaBox.style.borderColor = "var(--line)";
-          statusPill.textContent = "Near Baseline";
-          statusPill.className = "pill";
-        }
-      }
 
       const drivers = q("#drivers-list"), prescriptions = q("#prescriptions-list"); drivers.replaceChildren(); prescriptions.replaceChildren();
       const driverItems = data.drivers || [], prescriptionItems = data.prescriptions || [];
@@ -2488,8 +2427,7 @@
         simBtn.onclick = () => {
           if (emp.profile) {
             setView("simulator");
-            state.baselineRisk = null;
-            for (const [k, v] of Object.entries(emp.profile)) {
+                        for (const [k, v] of Object.entries(emp.profile)) {
               const el = q(`#field-${k}`);
               if (el) el.value = v;
             }
